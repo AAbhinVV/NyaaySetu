@@ -1,9 +1,14 @@
 "use client";
 
+import {  UserButton } from "@clerk/nextjs";
+
 export default function Home() {
   return (
-   <div>
+   <div className="flex flex-row justify-between m-auto">
+
     <h1>Welcome to the Home Page</h1>
+    {/* <SignOutButton forcedsign className="w-auto p-2 h-auto rounded-2xl bg-blue-500 text-white active:opacity-50 hover:opacity-75"/> */}
+     <UserButton />
    </div>
   );
 }
