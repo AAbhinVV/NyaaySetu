@@ -11,8 +11,11 @@
   "dependencies": {
     "@clerk/nextjs": "^6.36.7",
     "@clerk/themes": "^2.4.47",
+    "@supabase/ssr": "^0.10.0",
     "@supabase/supabase-js": "^2.101.1",
     "@tabler/icons-react": "^3.36.1",
+    "@trpc/client": "^11.16.0",
+    "@trpc/server": "^11.16.0",
     "@vercel/analytics": "^1.6.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
