@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
 
         switch (eventType) {
             case "user.created": {
-                const { error } = await supabaseClient.from("profiles").upsert({
+                const { error } = await supabaseClient.from("userProfile").upsert({
                     id: user.id,
                     email_address: email,
                     first_name: user.first_name || null,
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
                 break;
             }
             case "user.updated": {
-                const { error } = await supabaseClient.from("profiles").update({
+                const { error } = await supabaseClient.from("userProfile").update({
                     email_address: email,
                     first_name: user.first_name || null,
                     last_name: user.last_name || null,
@@ -98,6 +98,14 @@ export async function POST(req: NextRequest) {
                 }
                 console.log('User updated:', user.id);
                 break;
+            }
+
+            case "user.deleted": {
+                const { error } = await supabaseClient.from("userProfile").delete()
+                if (error) {
+                    console.error("Failed to delete user in database: ", error);
+                    return NextResponse.json({ error: "Failed to delete user from database" }, { status: 500 })
+                }
             }
 
             default: {
