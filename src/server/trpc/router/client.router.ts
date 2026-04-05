@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { createTRPCRouter, clientProcedure, protectedProcedure, baseProcedure, adminProcedure } from '../init'
+import { lawyerRouter } from './lawyer.router'
+import { createCallerFactory } from '../init'
 
 
 
@@ -419,7 +421,7 @@ export const clientRouter = createTRPCRouter({
 
             // 3. Insert message
             const { data: message, error: msgError } = await ctx.supabase
-                .from('messages')
+                .from('case_messages')
                 .insert({
                     case_id: input.caseId,
                     content: sanitizedBody,
@@ -608,9 +610,213 @@ export const clientRouter = createTRPCRouter({
         .mutation(async ({ ctx, input }) => {
             const { error: updateError } = await ctx.supabase
                 .from('notifications')
-                .select(`id, user_id`)
+                .update({ is_read: true })
                 .eq('id', input.notificationId)
                 .eq('user_id', ctx.userId)
+
+            if (updateError) {
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to mark notification as read',
+                })
+            }
+
+            return { success: true }
+        }),
+
+    markAllNotificationsRead: clientProcedure
+        .mutation(async ({ ctx }) => {
+            const { count, error: updateError } = await ctx.supabase
+                .from('notifications')
+                .update({ is_read: true })
+                .eq('user_id', ctx.userId)
+                .eq('is_read', false)
+                .select('id', { count: 'exact', head: true })
+
+            if (updateError) {
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to mark all notifications as read',
+                })
+            }
+
+            return { updated: count ?? 0 }
+        }),
+
+    submitReview: clientProcedure
+        .input(z.object({ caseId: z.uuid(), rating: z.number().min(1).max(5).int(), outcome: z.enum(['WON', 'LOST', 'SETTLED']), body: z.string().min(10).max(1000) }))
+        .mutation(async ({ ctx, input }) => {
+            // Guard 1: Ownership + fetch case data
+            const { data: caseData, error: caseError } = await ctx.supabase
+                .from('cases')
+                .select('id, status, lawyer_id')
+                .eq('id', input.caseId)
+                .eq('client_id', ctx.userId)
                 .single()
+
+            if (caseError || !caseData) {
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message: 'You do not have access to this case',
+                })
+            }
+
+            // Guard 2: Case must be CLOSED
+            if (caseData.status !== 'CLOSED') {
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message: 'Reviews can only be submitted for closed cases',
+                })
+            }
+
+            // Guard 3: No duplicate review for this case from this client
+            const { data: existingReview } = await ctx.supabase
+                .from('reviews')
+                .select('id')
+                .eq('case_id', input.caseId)
+                .eq('reviewer_id', ctx.userId)
+                .single()
+
+            if (existingReview) {
+                throw new TRPCError({
+                    code: 'CONFLICT',
+                    message: 'You have already submitted a review for this case',
+                })
+            }
+
+            // Insert the review
+            const { data: review, error: reviewError } = await ctx.supabase
+                .from('reviews')
+                .insert({
+                    case_id: input.caseId,
+                    lawyer_id: caseData.lawyer_id,
+                    reviewer_id: ctx.userId,
+                    rating: input.rating,
+                    outcome: input.outcome,
+                    body: input.body,
+                })
+                .select()
+                .single()
+
+            if (reviewError || !review) {
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to submit review',
+                })
+            }
+
+            // Recalculate lawyer's avg rating via server-side caller
+
+            const createCaller = createCallerFactory(lawyerRouter)
+            const serverCaller = createCaller(ctx)
+            await serverCaller.recalculateRating({ lawyerId: caseData.lawyer_id })
+
+            return review
+        }),
+
+    getMyReviews: clientProcedure
+        .input(z.object({ page: z.number().min(1).default(1), limit: z.number().min(1).max(20).default(10), }).optional())
+        .query(async ({ ctx, input }) => {
+
+            const page = input?.page ?? 1
+            const limit = input?.limit ?? 10
+            const offset = (page - 1) * limit
+
+            const { data: reviews, error: reviewError } = await ctx.supabase
+                .from('reviews')
+                .select(`
+                    id,
+                    rating,
+                    outcome,
+                    body,
+                    created_at,
+                    updated_at,
+                    case: cases (
+                        id,
+                        title,
+                        category,
+                        court_level,
+                        created_at,
+                    ),
+                    lawyer: lawyers (
+                        id,
+                        full_name,
+                        specializations,
+                        court_levels,
+                        years_of_experience,
+                        avg_rating,
+                        review_count
+                    )
+                `)
+                .eq('reviewer_id', ctx.userId)
+                .order('created_at', { ascending: false })
+                .range(offset, offset + limit - 1)
+
+            if (reviewError) {
+                throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to fetch reviews' })
+            }
+
+            return reviews ?? []
+        }),
+
+    getMyProfile: clientProcedure
+        .query(async ({ ctx }) => {
+            const { data: profile, error: profileError } = await ctx.supabase
+                .from('clients')
+                .select(`
+                    id,
+                    full_name,
+                    email,
+                    phone,
+                    city,
+                    state,
+                    created_at,
+                    updated_at
+                `)
+                .eq('user_id', ctx.userId)
+                .single()
+
+            if (profileError || !profile) {
+                throw new TRPCError({
+                    code: 'NOT_FOUND',
+                    message: 'Profile not found',
+                })
+            }
+
+            return profile
+        }),
+
+    updateMyProfile: clientProcedure
+        .input(z.object({ full_name: z.string().min(2).optional(), phone: z.string().regex(/^[6-9]\d{9}$/).optional(), city: z.string().optional(), state: z.string().optional() }))
+        .mutation(async ({ ctx, input }) => {
+            const updatePayload: Record<string, unknown> = {}
+
+            if (input.full_name !== undefined) updatePayload.fullName = input.full_name
+            if (input.phone !== undefined) updatePayload.phone = input.phone
+            if (input.city !== undefined) updatePayload.city = input.city
+            if (input.state !== undefined) updatePayload.state = input.state
+
+            if (Object.keys(updatePayload).length === 0) {
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message: 'No fields to update',
+                })
+            }
+
+            const { data: updatedProfile, error: updateError } = await ctx.supabase
+                .from('clients')
+                .update(updatePayload)
+                .eq('user_id', ctx.userId)
+                .select()
+                .single()
+
+            if (updateError || !updatedProfile) {
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to update profile',
+                })
+            }
+
+            return updatedProfile
         })
 })

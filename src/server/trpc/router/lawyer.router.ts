@@ -451,7 +451,7 @@ export const lawyerRouter = createTRPCRouter({
             }
 
             const total = stats?.length ?? 0
-            const won = stats?.filter((c) => c.verdict_outcome === 'WON').length ?? 0
+            const won = stats?.filter((c: any) => c.verdict_outcome === 'WON').length ?? 0
             const winRate = total > 0 ? Math.round((won / total) * 100) : 0
 
             const { data, error } = await ctx.supabase
@@ -497,7 +497,7 @@ export const lawyerRouter = createTRPCRouter({
                 count > 0
                     ? parseFloat(
                         (
-                            reviews.reduce((sum, r) => sum + r.rating, 0) / count
+                            reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / count
                         ).toFixed(2)
                     )
                     : 0
