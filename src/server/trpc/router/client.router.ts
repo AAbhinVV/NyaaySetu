@@ -124,7 +124,7 @@ export const clientRouter = createTRPCRouter({
     getMyConnections: clientProcedure
         .input(z.object({ status: z.enum(['PENDING', 'ACTIVE', 'DECLINED']).optional() }))
         .query(async ({ ctx, input }) => {
-            let dbQuery = ctx.supabase
+            let { data, error } = ctx.supabase
                 .from('connections')
                 .select(`
                         id,
@@ -155,10 +155,8 @@ export const clientRouter = createTRPCRouter({
                 .order('connected_at', { ascending: false })
 
             if (input.status) {
-                dbQuery = dbQuery.eq('status', input.status)
+                data = data.eq('status', input.status)
             }
-
-            const { data, error } = await dbQuery
 
             if (error) {
                 throw new TRPCError({
