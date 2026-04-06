@@ -14,7 +14,7 @@ export const documentRouter = createTRPCRouter({
 
             if (ownershipError) {
                 throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
+                    code: 'FORBIDDEN',
                     message: 'Failed to fetch case',
                 })
             }
@@ -28,8 +28,22 @@ export const documentRouter = createTRPCRouter({
 
             const { data: documents, error: documentError } = await ctx.supabase
                 .from('documents')
-                .select('*')
+                .select(`
+                    id, 
+                    file_name, 
+                    file_url, 
+                    sha256_hash, 
+                    chain_tx_id, 
+                    uploaded_by, 
+                    created_at
+                    users!uploaded_by(
+                        id,
+                        full_name,
+                        email
+                    )
+                    `)
                 .eq('case_id', input.caseId)
+                .is('deleted_at', null)
                 .order('created_at', { ascending: false })
 
             if (documentError) {
@@ -45,13 +59,13 @@ export const documentRouter = createTRPCRouter({
     registerUpload: protectedProcedure
         .input(z.object({
             caseId: z.uuid(),
-            fileName: z.string(),
-            fileType: z.string(),
-            fileSize: z.number(),
-            storagePath: z.string(),
+            fileName: z.string().min(1),
+            fileUrl: z.url(),
+            sha256Hash: z.string().length(64),
+            chainTxId: z.string().min(1)
         }))
         .mutation(async ({ ctx, input }) => {
-            const { error: ownershipError } = await ctx.supabase
+            const { data: caseData, error: ownershipError } = await ctx.supabase
                 .from('cases')
                 .select('*', { count: 'exact', head: true })
                 .eq('id', input.caseId)
@@ -59,7 +73,7 @@ export const documentRouter = createTRPCRouter({
 
             if (ownershipError) {
                 throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
+                    code: 'FORBIDDEN',
                     message: 'Failed to fetch case',
                 })
             }
@@ -71,26 +85,48 @@ export const documentRouter = createTRPCRouter({
                 })
             }
 
-            const { data, error } = await ctx.supabase
+            if (caseData.status === 'CLOSED') {
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message: 'Case is closed'
+                })
+            }
+
+            const { data: documentData, error: documentError } = await ctx.supabase
                 .from('documents')
                 .insert({
                     case_id: input.caseId,
                     file_name: input.fileName,
-                    file_type: input.fileType,
-                    file_size: input.fileSize,
-                    storage_path: input.storagePath,
+                    file_url: input.fileUrl,
+                    sha256_hash: input.sha256Hash,
+                    chain_tx_id: input.chainTxId,
+                    uploaded_by: ctx.userId,
                 })
                 .select('*')
                 .single()
 
-            if (error) {
+            const { data: notificationData, error: notificationError } = await ctx.supabase
+                .from('notifications')
+                .insert({
+                    user_id: ctx.userId,
+                    case_id: input.caseId,
+                    type: 'DOCUMENT_UPLOADED',
+                    message: `Document ${input.fileName} uploaded`,
+                    read: false,
+                })
+                .select('*')
+                .single()
+
+            if (documentError || notificationError) {
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to register upload',
                 })
             }
 
-            return data
+            return {
+                document: documentData,
+            }
         }),
 
     deleteDocument: protectedProcedure
