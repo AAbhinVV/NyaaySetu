@@ -1,10 +1,10 @@
-import { lawyerRouter } from './routers/lawyer.router'
-import { caseRouter } from './routers/case.router'
-import { connectionRouter } from './routers/connection.router'
-import { documentRouter } from './routers/document.router'
-import { reviewRouter } from './routers/review.router'
-import { notificationRouter } from './routers/notification.router'
-import { adminRouter } from './routers/admin.router'
+import { lawyerRouter } from './router/lawyer.router'
+import { caseRouter } from './router/case.router'
+import { connectionRouter } from './router/connection.router'
+import { documentRouter } from './router/document.router'
+import { reviewRouter } from './router/review.router'
+import { notificationRouter } from './router/notification.router'
+import { adminRouter } from './router/admin.router'
 import { createTRPCRouter } from './init'
 
 export const appRouter = createTRPCRouter({
