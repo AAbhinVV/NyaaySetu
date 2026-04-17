@@ -1,82 +1,99 @@
 import { z } from "zod";
-import { createTRPCRouter, lawyerProcedure, protectedProcedure, createCallerFactory } from "../init";
+import { createTRPCRouter, lawyerProcedure, protectedProcedure, clientProcedure, createCallerFactory } from "../init";
 import { TRPCError } from "@trpc/server";
-import { caseRouter } from "./case.router";
-
+import { createCaseInternal } from "./case.router";
 
 const connectionStatus = z.enum(['PENDING', 'ACTIVE', 'DECLINED'])
 
-
 export const connectionRouter = createTRPCRouter({
 
-    createConnection: protectedProcedure
-        .input(z.object({ clientId: z.uuid(), lawyerId: z.uuid(), razorpayOrderId: z.string(), razorpayPaymentId: z.string(), razorpayPaymentAmount: z.string() }))
+    /** Client initiates a connection with a lawyer after payment */
+    createConnection: clientProcedure
+        .input(z.object({
+            lawyerId: z.uuid(),
+            razorpayOrderId: z.string(),
+            razorpayPaymentId: z.string(),
+            razorpayPaymentAmount: z.number(),
+        }))
         .mutation(async ({ ctx, input }) => {
-            const { clientId, lawyerId, razorpayOrderId, razorpayPaymentId, razorpayPaymentAmount } = input
-
-            const { activeConnection: activeConnectionError } = await ctx.supabase
+            // 1. Check for existing active/pending connection
+            const { count, error: checkError } = await ctx.supabase
                 .from('connections')
-                .select('*', { count: 'exact', head: true })
-                .eq('client_id', clientId)
-                .eq('lawyer_id', lawyerId)
+                .select('id', { count: 'exact', head: true })
+                .eq('client_id', ctx.userId)
+                .eq('lawyer_id', input.lawyerId)
                 .in('status', ['ACTIVE', 'PENDING'])
 
-            if (activeConnectionError) {
+            if (checkError) {
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
-                    message: 'You already have an active connection with this lawyer',
+                    message: 'Failed to check existing connections',
                 })
             }
 
-            const {
-                data: connectionsData, error: connectionsError,
-                data: paymentsData, error: paymentsError
+            if ((count ?? 0) > 0) {
+                throw new TRPCError({
+                    code: 'CONFLICT',
+                    message: 'You already have an active or pending connection with this lawyer',
+                })
+            }
 
-            } = await Promise.all([
-                ctx.supabase
-                    .from('connections')
-                    .insert({
-                        client_id: clientId,
-                        lawyer_id: lawyerId,
-                        razorpay_order_id: razorpayOrderId,
-                        razorpay_payment_id: razorpayPaymentId,
-                    })
-                    .eq('status', 'PENDING'),
+            // 2. Create connection
+            const { data: connection, error: connectionError } = await ctx.supabase
+                .from('connections')
+                .insert({
+                    client_id: ctx.userId,
+                    lawyer_id: input.lawyerId,
+                    status: 'PENDING',
+                })
+                .select()
+                .single()
 
-                ctx.supabase
-                    .from('payments')
-                    .insert({
-                        client_id: clientId,
-                        lawyer_id: lawyerId,
-                        razorpay_order_id: razorpayOrderId,
-                        razorpay_payment_id: razorpayPaymentId,
-                        razorpay_payment_amount: razorpayPaymentAmount
-                    })
-                    .eq('status', 'PENDING')
-            ])
-
-            if (connectionsError) {
+            if (connectionError || !connection) {
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to create connection',
                 })
             }
 
-            if (paymentsError) {
+            // 3. Create payment record
+            const { error: paymentError } = await ctx.supabase
+                .from('payments')
+                .insert({
+                    connection_id: connection.id,
+                    client_id: ctx.userId,
+                    razorpay_order_id: input.razorpayOrderId,
+                    razorpay_payment_id: input.razorpayPaymentId,
+                    amount: input.razorpayPaymentAmount,
+                    status: 'CAPTURED',
+                })
+
+            if (paymentError) {
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
-                    message: `Failed to create payment`
+                    message: 'Failed to record payment',
                 })
             }
 
-            return data
+            // 4. Notify the lawyer
+            await ctx.supabase
+                .from('notifications')
+                .insert({
+                    user_id: input.lawyerId,
+                    type: 'CONNECTION_REQUEST',
+                    title: 'New connection request',
+                    body: 'A client has requested to connect with you.',
+                    case_id: null,
+                })
+
+            return connection
         }),
 
+    /** Lawyer accepts a pending connection — creates a case */
     acceptConnection: lawyerProcedure
-        .input(z.object({ connectionId: z.uuid() }))
+        .input(z.object({ connectionId: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
-
-            // Step 1: Fetch connection and verify lawyer owns it
+            // 1. Fetch connection and verify lawyer owns it
             const { data: connection, error: fetchError } = await ctx.supabase
                 .from('connections')
                 .select('id, client_id, lawyer_id, status')
@@ -91,7 +108,7 @@ export const connectionRouter = createTRPCRouter({
                 })
             }
 
-            // Step 2: Guard — must be PENDING to accept
+            // 2. Must be PENDING to accept
             if (connection.status !== 'PENDING') {
                 throw new TRPCError({
                     code: 'BAD_REQUEST',
@@ -99,7 +116,7 @@ export const connectionRouter = createTRPCRouter({
                 })
             }
 
-            // Step 3: Update connection to ACTIVE
+            // 3. Update connection to ACTIVE
             const { data: updatedConnection, error: updateError } = await ctx.supabase
                 .from('connections')
                 .update({ status: 'ACTIVE', accepted_at: new Date().toISOString() })
@@ -114,18 +131,17 @@ export const connectionRouter = createTRPCRouter({
                 })
             }
 
-            // Step 4: Create the case via server-side caller
-            const createCaller = createCallerFactory(caseRouter)
-            const caseCaller = createCaller(ctx)
-
-            const newCase = await caseCaller.create({
-                connectionId: connection.id,
-                clientId: connection.client_id,
-                lawyerId: connection.lawyer_id,
-            }).catch(() => {
-                // Step 4a: Case creation failed — roll back the connection to PENDING
-                // so the lawyer can try again and the client is not left in a broken state
-                ctx.supabase
+            // 4. Create the case via the shared internal function
+            let newCase
+            try {
+                newCase = await createCaseInternal(ctx, {
+                    connectionId: connection.id,
+                    clientId: connection.client_id,
+                    lawyerId: connection.lawyer_id,
+                })
+            } catch {
+                // Roll back connection to PENDING so the lawyer can retry
+                await ctx.supabase
                     .from('connections')
                     .update({ status: 'PENDING', accepted_at: null })
                     .eq('id', input.connectionId)
@@ -134,9 +150,9 @@ export const connectionRouter = createTRPCRouter({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Connection accepted but case creation failed. Please try again.',
                 })
-            })
+            }
 
-            // Step 5: Notify the client
+            // 5. Notify the client
             await ctx.supabase
                 .from('notifications')
                 .insert({
@@ -153,11 +169,16 @@ export const connectionRouter = createTRPCRouter({
             }
         }),
 
+    /** Lawyer declines a pending connection */
     declineConnection: lawyerProcedure
-        .input(z.object({ connectionId: z.uuid(), reason: z.string().max(500).optional() }))
+        .input(z.object({
+            connectionId: z.string().uuid(),
+            reason: z.string().max(500).optional(),
+        }))
         .mutation(async ({ ctx, input }) => {
+            // 1. Fetch from the correct table ('connections', not 'connection')
             const { data: connection, error: fetchError } = await ctx.supabase
-                .from('connection')
+                .from('connections')
                 .select('id, client_id, lawyer_id, status')
                 .eq('id', input.connectionId)
                 .eq('lawyer_id', ctx.userId)
@@ -166,20 +187,24 @@ export const connectionRouter = createTRPCRouter({
             if (fetchError || !connection) {
                 throw new TRPCError({
                     code: 'FORBIDDEN',
-                    message: 'You are not authorized to decline this connection',
+                    message: 'Connection not found or you do not have access',
                 })
             }
 
             if (connection.status !== 'PENDING') {
                 throw new TRPCError({
                     code: 'BAD_REQUEST',
-                    message: `Cannot accept a connection with status ${connection.status}`,
+                    message: `Cannot decline a connection with status ${connection.status}`,
                 })
             }
 
+            // 2. Update to DECLINED
             const { data: updatedConnection, error: updateError } = await ctx.supabase
                 .from('connections')
-                .update({ status: 'DECLINED', declined_at: new Date().toISOString() })
+                .update({
+                    status: 'DECLINED',
+                    decline_reason: input.reason ?? null,
+                })
                 .eq('id', input.connectionId)
                 .select()
                 .single()
@@ -187,11 +212,12 @@ export const connectionRouter = createTRPCRouter({
             if (updateError || !updatedConnection) {
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Failed to update connection status',
+                    message: 'Failed to decline connection',
                 })
             }
 
-            const { data: notification, error: notificationError } = await ctx.supabase
+            // 3. Notify the client
+            const { error: notifError } = await ctx.supabase
                 .from('notifications')
                 .insert({
                     user_id: connection.client_id,
@@ -203,32 +229,31 @@ export const connectionRouter = createTRPCRouter({
                     case_id: null,
                 })
 
-            if (notificationError) {
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Failed to create notification'
-                })
+            if (notifError) {
+                console.error('Failed to send decline notification:', notifError)
             }
 
-            return {
-                success: true,
-                message: 'Connection declined successfully'
-            }
+            return { success: true }
         }),
 
+    /** Lawyer: get incoming connection requests (paid, pending) */
     getIncomingRequests: lawyerProcedure
-        .input(z.object({ status: connectionStatus.optional(), page: z.number().default(1), limit: z.number().default(10) }))
+        .input(z.object({
+            status: connectionStatus.optional(),
+            page: z.number().min(1).default(1),
+            limit: z.number().min(1).max(50).default(10),
+        }))
         .query(async ({ ctx, input }) => {
             const offset = (input.page - 1) * input.limit
 
-            const { data: connections, error: connectionsError } = await ctx.supabase
+            let query = ctx.supabase
                 .from('connections')
                 .select(`
                     id,
                     status,
-                    created_At,
+                    created_at,
                     updated_at,
-                    users!client_id(
+                    users!client_id (
                         id,
                         full_name,
                         email
@@ -236,111 +261,106 @@ export const connectionRouter = createTRPCRouter({
                     payments (
                         id,
                         status,
-                        razorpay_payment_amount,
+                        amount,
                         razorpay_payment_id
                     )
-                    `, { count: 'exact' })
+                `, { count: 'exact' })
                 .eq('lawyer_id', ctx.userId)
-                .eq('payment_status', 'CAPTURED')
                 .order('created_at', { ascending: false })
                 .range(offset, offset + input.limit - 1)
 
-            if (connectionsError) {
+            // Apply optional status filter
+            if (input.status) {
+                query = query.eq('status', input.status)
+            }
+
+            const { data, count, error } = await query
+
+            if (error) {
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Failed to fetch connections'
+                    message: 'Failed to fetch incoming requests',
                 })
             }
 
-            const total = connections.length
-            const totalPages = Math.ceil(total / input.limit)
-            const page = input.page
-
-
+            const total = count ?? 0
             return {
-                connections,
+                connections: data ?? [],
                 total,
-                page,
-                totalPages
+                page: input.page,
+                totalPages: Math.ceil(total / input.limit),
             }
         }),
 
+    /** Lawyer: get active connections */
     getMyConnections: lawyerProcedure
-        .input(z.object({ page: z.number().default(1), limit: z.number().default(10) }))
+        .input(z.object({
+            page: z.number().min(1).default(1),
+            limit: z.number().min(1).max(50).default(10),
+        }))
         .query(async ({ ctx, input }) => {
             const offset = (input.page - 1) * input.limit
 
-            const { data: connections, error: connectionsError } = await ctx.supabase
+            const { data, count, error } = await ctx.supabase
                 .from('connections')
                 .select(`
                     id,
                     status,
-                    created_At,
+                    created_at,
                     updated_at,
-                    users!client_id(
+                    users!client_id (
                         id,
                         full_name,
                         email
-                    ),
-                    `, { count: 'exact' })
+                    )
+                `, { count: 'exact' })
                 .eq('lawyer_id', ctx.userId)
-                .eq('connection_status', 'ACTIVE')
+                .eq('status', 'ACTIVE')
                 .order('created_at', { ascending: false })
                 .range(offset, offset + input.limit - 1)
 
-            if (connectionsError) {
+            if (error) {
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Failed to fetch connections'
+                    message: 'Failed to fetch connections',
                 })
             }
 
-            const total = connections.length
-            const totalPages = Math.ceil(total / input.limit)
-            const page = input.page
-
-
+            const total = count ?? 0
             return {
-                connections,
+                connections: data ?? [],
                 total,
-                page,
-                totalPages
+                page: input.page,
+                totalPages: Math.ceil(total / input.limit),
             }
         }),
 
+    /** Check if a client-lawyer pair has an active connection */
     isConnected: protectedProcedure
-        .input(z.object({ clientId: z.uuid(), lawyerId: z.uuid() }))
+        .input(z.object({
+            clientId: z.string().uuid(),
+            lawyerId: z.string().uuid(),
+        }))
         .query(async ({ ctx, input }) => {
-            const { data: conenctionData, error: connectionError } = ctx.supabase
+            const { data, error } = await ctx.supabase
                 .from('connections')
-                .select(`
-                    id,
-                    client_id,
-                    lawyer_id,
-                    status,
-                    created_at,
-                    updated_at
-                    `, { count: 'exact', head: true })
+                .select('id, status')
                 .eq('client_id', input.clientId)
                 .eq('lawyer_id', input.lawyerId)
-                .single()
+                .in('status', ['ACTIVE', 'PENDING'])
+                .maybeSingle()
 
-            if (connectionError) {
+            if (error) {
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Failed to fetch connection'
+                    message: 'Failed to check connection status',
                 })
             }
 
-            if (conenctionData.status !== 'ACTIVE') {
-                return {
-                    connected: false
-                }
-            }
-
             return {
-                connected: true
+                connected: data?.status === 'ACTIVE',
+                pending: data?.status === 'PENDING',
+                status: data?.status ?? null,
             }
-        })
-
+        }),
 })

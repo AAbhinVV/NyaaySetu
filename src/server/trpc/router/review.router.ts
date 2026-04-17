@@ -1,16 +1,17 @@
 import { z } from "zod";
-import { baseProcedure, clientProcedure, adminProcedure, createTRPCRouter, } from "../init";
+import { baseProcedure, clientProcedure, adminProcedure, createTRPCRouter, createCallerFactory } from "../init";
 import { TRPCError } from "@trpc/server";
-
-
-
-
 
 const caseResult = z.enum(['WON', 'LOST', 'SETTLED'])
 
 export const reviewRouter = createTRPCRouter({
+    /** Public: get paginated reviews for a lawyer (unflagged only) */
     getByLawyer: baseProcedure
-        .input(z.object({ lawyerId: z.uuid(), page: z.number().min(1).default(1), limit: z.number().min(1).max(20).default(10) }))
+        .input(z.object({
+            lawyerId: z.string().uuid(),
+            page: z.number().min(1).default(1),
+            limit: z.number().min(1).max(20).default(10),
+        }))
         .query(async ({ ctx, input }) => {
             const offset = (input.page - 1) * input.limit
 
@@ -19,18 +20,18 @@ export const reviewRouter = createTRPCRouter({
                 .select(`
                     id,
                     rating,
-                    comment,
+                    outcome,
+                    body,
                     created_at,
-                    users!reviewer_id(
+                    users!reviewer_id (
                         id,
-                        full_name,
-                        email
+                        full_name
                     )
                 `, { count: 'exact' })
                 .eq("lawyer_id", input.lawyerId)
                 .eq("flagged", false)
-                .range(offset, offset + input.limit - 1)
                 .order("created_at", { ascending: false })
+                .range(offset, offset + input.limit - 1)
 
             if (error) {
                 throw new TRPCError({
@@ -40,53 +41,53 @@ export const reviewRouter = createTRPCRouter({
             }
 
             const total = count ?? 0
-
             return {
                 reviews: data ?? [],
                 total,
                 page: input.page,
-                totalPages: Math.ceil((data?.length ?? 0) / input.limit)
+                totalPages: Math.ceil(total / input.limit),
             }
         }),
 
+    /** Client: submit a review for a closed case */
     submitReview: clientProcedure
-        .input(z.object({ caseId: z.uuid(), rating: z.number().min(1).max(5).int(), outcome: caseResult, body: z.string().min(10).max(1000) }))
+        .input(z.object({
+            caseId: z.string().uuid(),
+            rating: z.number().min(1).max(5).int(),
+            outcome: caseResult,
+            body: z.string().min(10).max(1000),
+        }))
         .mutation(async ({ ctx, input }) => {
+            // 1. Fetch the SPECIFIC case by ID and verify client ownership
             const { data: caseData, error: caseError } = await ctx.supabase
                 .from("cases")
-                .select("*")
+                .select("id, status, lawyer_id")
+                .eq("id", input.caseId)
                 .eq("client_id", ctx.userId)
-                .order("created_at", { ascending: true })
+                .single()
 
-            if (caseError) {
-                throw new TRPCError({
-                    code: "FORBIDDEN",
-                    message: "Failed to fetch case"
-                })
-            }
-
-            if (caseData?.length === 0) {
+            if (caseError || !caseData) {
                 throw new TRPCError({
                     code: "NOT_FOUND",
-                    message: "Cases not found"
+                    message: "Case not found or you do not have access",
                 })
             }
 
-
-
+            // 2. Case must be CLOSED
             if (caseData.status !== "CLOSED") {
                 throw new TRPCError({
-                    code: "FORBIDDEN",
-                    message: "Case must be closed to submit a review"
+                    code: "BAD_REQUEST",
+                    message: "Reviews can only be submitted for closed cases",
                 })
             }
 
+            // 3. No duplicate reviews
             const { data: existingReview } = await ctx.supabase
                 .from('reviews')
                 .select('id')
                 .eq('case_id', input.caseId)
                 .eq('reviewer_id', ctx.userId)
-                .single()
+                .maybeSingle()
 
             if (existingReview) {
                 throw new TRPCError({
@@ -95,6 +96,7 @@ export const reviewRouter = createTRPCRouter({
                 })
             }
 
+            // 4. Insert review
             const { data: reviewData, error: reviewError } = await ctx.supabase
                 .from("reviews")
                 .insert({
@@ -104,30 +106,28 @@ export const reviewRouter = createTRPCRouter({
                     rating: input.rating,
                     outcome: input.outcome,
                     body: input.body,
-                    flagged: false,
                 })
-                .select("*")
+                .select()
                 .single()
 
-            if (reviewError) {
+            if (reviewError || !reviewData) {
                 throw new TRPCError({
                     code: "INTERNAL_SERVER_ERROR",
-                    message: "Failed to submit review"
+                    message: "Failed to submit review",
                 })
             }
 
+            // 5. Recalculate lawyer rating
             try {
-                const { createCallerFactory } = await import('../init')
                 const { lawyerRouter } = await import('./lawyer.router')
-
                 const createCaller = createCallerFactory(lawyerRouter)
                 const serverCaller = createCaller(ctx)
                 await serverCaller.recalculateRating({ lawyerId: caseData.lawyer_id })
-
-            } catch (error) {
-                console.error('Failed to recalculate lawyer rating after review:', error)
+            } catch (err) {
+                console.error('Failed to recalculate lawyer rating after review:', err)
             }
 
+            // 6. Notify the lawyer
             await ctx.supabase
                 .from('notifications')
                 .insert({
@@ -138,14 +138,17 @@ export const reviewRouter = createTRPCRouter({
                     case_id: input.caseId,
                 })
 
-            return {
-                review: reviewData,
-            }
+            return reviewData
         }),
 
+    /** Admin: flag a review (hides it from public listings) */
     flagReview: adminProcedure
-        .input(z.object({ reviewId: z.uuid(), reason: z.string().min(5).max(500) }))
+        .input(z.object({
+            reviewId: z.string().uuid(),
+            reason: z.string().min(5).max(500),
+        }))
         .mutation(async ({ ctx, input }) => {
+            // 1. Fetch review — include 'flagged' in select for the guard check
             const { data: reviewData, error: reviewError } = await ctx.supabase
                 .from("reviews")
                 .select(`
@@ -156,73 +159,65 @@ export const reviewRouter = createTRPCRouter({
                     rating,
                     outcome,
                     body,
-                    `)
+                    flagged
+                `)
                 .eq("id", input.reviewId)
                 .single()
 
-            if (reviewError) {
-                throw new TRPCError({
-                    code: "INTERNAL_SERVER_ERROR",
-                    message: "Failed to fetch review"
-                })
-            }
-
-            if (!reviewData) {
+            if (reviewError || !reviewData) {
                 throw new TRPCError({
                     code: "NOT_FOUND",
-                    message: "Review not found"
+                    message: "Review not found",
                 })
             }
 
             if (reviewData.flagged) {
                 throw new TRPCError({
                     code: "BAD_REQUEST",
-                    message: "Review is already flagged"
+                    message: "Review is already flagged",
                 })
             }
 
+            // 2. Flag the review (DB column is 'flag_reason', not 'flagged_reason')
             const { data: updatedReview, error: updateError } = await ctx.supabase
                 .from("reviews")
                 .update({
                     flagged: true,
-                    flagged_reason: input.reason,
+                    flag_reason: input.reason,
                     flagged_at: new Date().toISOString(),
                 })
                 .eq("id", input.reviewId)
-                .select("*")
+                .select()
                 .single()
 
-            if (updateError) {
+            if (updateError || !updatedReview) {
                 throw new TRPCError({
                     code: "INTERNAL_SERVER_ERROR",
-                    message: "Failed to flag review"
+                    message: "Failed to flag review",
                 })
             }
 
+            // 3. Recalculate lawyer rating (flagged reviews are excluded)
             try {
-                const { createCallerFactory } = await import('../init')
                 const { lawyerRouter } = await import('./lawyer.router')
-
                 const createCaller = createCallerFactory(lawyerRouter)
                 const serverCaller = createCaller(ctx)
                 await serverCaller.recalculateRating({ lawyerId: reviewData.lawyer_id })
-
-            } catch (error) {
-                console.error('Failed to recalculate lawyer rating after review:', error)
+            } catch (err) {
+                console.error('Failed to recalculate lawyer rating after flagging:', err)
             }
 
+            // 4. Notify the lawyer
             await ctx.supabase
                 .from('notifications')
                 .insert({
                     user_id: reviewData.lawyer_id,
                     type: 'REVIEW_FLAGGED',
-                    title: 'Your review has been flagged',
-                    body: `Your review has been flagged by an admin.`,
+                    title: 'A review on your profile has been flagged',
+                    body: 'A review has been flagged by our moderation team for review.',
                     case_id: reviewData.case_id,
                 })
 
-            return {
-                review: updatedReview,
-            }
-        })
+            return updatedReview
+        }),
 })

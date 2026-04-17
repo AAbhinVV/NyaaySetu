@@ -10,7 +10,7 @@ create type verification_status as enum ('PENDING', 'VERIFIED', 'REJECTED');
 create type connection_status as enum ('PENDING', 'ACTIVE', 'DECLINED');
 
 create type case_status as enum (
-  'ACTIVE',
+  'IN_PROGRESS',
   'HEARING_SET',
   'VERDICT',
   'CLOSED'

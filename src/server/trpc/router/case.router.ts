@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
-import { createTRPCRouter, protectedProcedure, lawyerProcedure, clientProcedure } from '../init'
+import { createTRPCRouter, protectedProcedure, lawyerProcedure } from '../init'
 import type { TRPCContext } from '../init'
 
 // ─── Shared Internal Function ─────────────────────────────────────────────────
@@ -27,8 +27,8 @@ export async function createCaseInternal(
         })
     }
 
-    // Step 2: Generate e-token number (simple unique token for MVP)
-    const eToken = `NYS-${Date.now()}-${Math.floor(Math.random() * 10000)}`
+    // Step 2: Generate e-token number using crypto-safe random
+    const eToken = `NYS-${crypto.randomUUID().slice(0, 8).toUpperCase()}-${Date.now()}`
 
     // Step 3: Create the case
     const { data: newCase, error: caseError } = await ctx.supabase
@@ -52,8 +52,8 @@ export async function createCaseInternal(
         })
     }
 
-    // Step 4: Insert initial timeline event
-    await ctx.supabase
+    // Step 4: Insert initial timeline event (check for errors)
+    const { error: timelineError } = await ctx.supabase
         .from('case_timeline')
         .insert({
             case_id: newCase.id,
@@ -62,14 +62,22 @@ export async function createCaseInternal(
             created_by: input.lawyerId,
         })
 
-    // Step 5: Create e_token record
-    await ctx.supabase
+    if (timelineError) {
+        console.error('Failed to insert case timeline entry:', timelineError)
+    }
+
+    // Step 5: Create e_token record (check for errors)
+    const { error: tokenError } = await ctx.supabase
         .from('e_tokens')
         .insert({
             case_id: newCase.id,
             token_number: eToken,
             status: 'ACTIVE',
         })
+
+    if (tokenError) {
+        console.error('Failed to insert e_token record:', tokenError)
+    }
 
     return newCase
 }
@@ -78,7 +86,7 @@ export async function createCaseInternal(
 
 export const caseRouter = createTRPCRouter({
 
-    // ── Internal: create case — called from connection.accept ─────────────────
+    /** Internal: create case — called from connection.accept */
     createCase: lawyerProcedure
         .input(z.object({
             connectionId: z.string().uuid(),
@@ -89,7 +97,7 @@ export const caseRouter = createTRPCRouter({
             return createCaseInternal(ctx, input)
         }),
 
-    // ── Shared: get all cases — lawyer sees theirs, client sees theirs ─────────
+    /** Shared: get all cases — lawyer sees theirs, client sees theirs */
     getAllCases: protectedProcedure
         .input(z.object({
             status: z.enum(['IN_PROGRESS', 'HEARING_SET', 'VERDICT', 'CLOSED']).optional(),
@@ -98,38 +106,31 @@ export const caseRouter = createTRPCRouter({
         }))
         .query(async ({ ctx, input }) => {
             const offset = (input.page - 1) * input.limit
-
-            // Build base query — filter by role
-            // If lawyer: show cases where lawyer_id = ctx.userId
-            // If client: show cases where client_id = ctx.userId
             const isLawyer = ctx.role === 'LAWYER'
 
-            let dbQuery = ctx.supabase
+            let query = ctx.supabase
                 .from('cases')
                 .select(`
-          id,
-          title,
-          category,
-          status,
-          e_token,
-          jurisdiction_city,
-          next_hearing_at,
-          created_at,
-          lawyers ( id, full_name ),
-          users!client_id ( id, full_name )
-        `, { count: 'exact' })
+                    id,
+                    title,
+                    category,
+                    status,
+                    e_token,
+                    jurisdiction_city,
+                    next_hearing_at,
+                    created_at,
+                    lawyers ( id, full_name ),
+                    users!client_id ( id, full_name )
+                `, { count: 'exact' })
+                .eq(isLawyer ? 'lawyer_id' : 'client_id', ctx.userId)
                 .order('created_at', { ascending: false })
                 .range(offset, offset + input.limit - 1)
 
-            dbQuery = isLawyer
-                ? dbQuery.eq('lawyer_id', ctx.userId)
-                : dbQuery.eq('client_id', ctx.userId)
-
             if (input.status) {
-                dbQuery = dbQuery.eq('status', input.status)
+                query = query.eq('status', input.status)
             }
 
-            const { data, count, error } = await dbQuery
+            const { data, count, error } = await query
 
             if (error) {
                 throw new TRPCError({
@@ -147,28 +148,23 @@ export const caseRouter = createTRPCRouter({
             }
         }),
 
-    // ── Shared: get single case by ID ─────────────────────────────────────────
-    getCasesById: protectedProcedure
+    /** Shared: get single case by ID */
+    getCaseById: protectedProcedure
         .input(z.object({ caseId: z.string().uuid() }))
         .query(async ({ ctx, input }) => {
             const isLawyer = ctx.role === 'LAWYER'
 
-            let dbQuery = ctx.supabase
+            const { data, error } = await ctx.supabase
                 .from('cases')
                 .select(`
-          *,
-          lawyers ( id, full_name, city, specializations, avg_rating, phone ),
-          users!client_id ( id, full_name, email, phone ),
-          e_tokens ( token_number, court_name, hearing_date, status )
-        `)
+                    *,
+                    lawyers ( id, full_name, city, specializations, avg_rating, phone ),
+                    users!client_id ( id, full_name, email, phone ),
+                    e_tokens ( token_number, court_name, hearing_date, status )
+                `)
                 .eq('id', input.caseId)
-
-            // scope to the requesting user based on role
-            dbQuery = isLawyer
-                ? dbQuery.eq('lawyer_id', ctx.userId)
-                : dbQuery.eq('client_id', ctx.userId)
-
-            const { data, error } = await dbQuery.single()
+                .eq(isLawyer ? 'lawyer_id' : 'client_id', ctx.userId)
+                .single()
 
             if (error || !data) {
                 throw new TRPCError({
@@ -180,7 +176,7 @@ export const caseRouter = createTRPCRouter({
             return data
         }),
 
-    // ── Lawyer: update case status ─────────────────────────────────────────────
+    /** Lawyer: update case status */
     updateStatus: lawyerProcedure
         .input(z.object({
             caseId: z.string().uuid(),
@@ -202,7 +198,6 @@ export const caseRouter = createTRPCRouter({
                 })
             }
 
-            // Cannot reopen a closed case
             if (existing.status === 'CLOSED') {
                 throw new TRPCError({
                     code: 'BAD_REQUEST',
@@ -224,8 +219,8 @@ export const caseRouter = createTRPCRouter({
                 })
             }
 
-            // Add timeline event
-            await ctx.supabase
+            // Add timeline event (with error check)
+            const { error: timelineError } = await ctx.supabase
                 .from('case_timeline')
                 .insert({
                     case_id: input.caseId,
@@ -234,10 +229,14 @@ export const caseRouter = createTRPCRouter({
                     created_by: ctx.userId,
                 })
 
+            if (timelineError) {
+                console.error('Failed to insert timeline event:', timelineError)
+            }
+
             return data
         }),
 
-    // ── Lawyer: add hearing date ───────────────────────────────────────────────
+    /** Lawyer: add hearing date */
     addHearingDate: lawyerProcedure
         .input(z.object({
             caseId: z.string().uuid(),
@@ -268,7 +267,7 @@ export const caseRouter = createTRPCRouter({
                 })
             }
 
-            // Update next_hearing_at on case
+            // Update case
             const { data, error } = await ctx.supabase
                 .from('cases')
                 .update({
@@ -286,31 +285,32 @@ export const caseRouter = createTRPCRouter({
                 })
             }
 
-            // Add timeline event
-            await ctx.supabase
-                .from('case_timeline')
-                .insert({
-                    case_id: input.caseId,
-                    event_type: 'HEARING_SCHEDULED',
-                    description: `Hearing scheduled at ${input.courtName} on ${input.hearingDate}${input.notes ? `. Notes: ${input.notes}` : ''}`,
-                    created_by: ctx.userId,
-                })
+            // Timeline + notification in parallel
+            await Promise.all([
+                ctx.supabase
+                    .from('case_timeline')
+                    .insert({
+                        case_id: input.caseId,
+                        event_type: 'HEARING_SCHEDULED',
+                        description: `Hearing scheduled at ${input.courtName} on ${input.hearingDate}${input.notes ? `. Notes: ${input.notes}` : ''}`,
+                        created_by: ctx.userId,
+                    }),
 
-            // Notify client
-            await ctx.supabase
-                .from('notifications')
-                .insert({
-                    user_id: existing.client_id,
-                    type: 'HEARING_SCHEDULED',
-                    title: 'Hearing date set',
-                    body: `Your hearing has been scheduled at ${input.courtName} on ${new Date(input.hearingDate).toLocaleDateString('en-IN')}`,
-                    case_id: input.caseId,
-                })
+                ctx.supabase
+                    .from('notifications')
+                    .insert({
+                        user_id: existing.client_id,
+                        type: 'HEARING_SCHEDULED',
+                        title: 'Hearing date set',
+                        body: `Your hearing has been scheduled at ${input.courtName} on ${new Date(input.hearingDate).toLocaleDateString('en-IN')}`,
+                        case_id: input.caseId,
+                    }),
+            ])
 
             return data
         }),
 
-    // ── Lawyer: record verdict ─────────────────────────────────────────────────
+    /** Lawyer: record verdict and close case */
     recordVerdict: lawyerProcedure
         .input(z.object({
             caseId: z.string().uuid(),
@@ -360,38 +360,43 @@ export const caseRouter = createTRPCRouter({
                 })
             }
 
-            // Add timeline event
-            await ctx.supabase
-                .from('case_timeline')
-                .insert({
-                    case_id: input.caseId,
-                    event_type: 'VERDICT_RECORDED',
-                    description: `Verdict recorded: ${input.outcome}${input.summary ? `. ${input.summary}` : ''}`,
-                    created_by: ctx.userId,
-                })
+            // Timeline + notification in parallel
+            await Promise.all([
+                ctx.supabase
+                    .from('case_timeline')
+                    .insert({
+                        case_id: input.caseId,
+                        event_type: 'VERDICT_RECORDED',
+                        description: `Verdict recorded: ${input.outcome}${input.summary ? `. ${input.summary}` : ''}`,
+                        created_by: ctx.userId,
+                    }),
 
-            // Notify client of verdict
-            await ctx.supabase
-                .from('notifications')
-                .insert({
-                    user_id: existing.client_id,
-                    type: 'VERDICT',
-                    title: 'Your case verdict is in',
-                    body: `Your case outcome: ${input.outcome}. You can now leave a review for your lawyer.`,
-                    case_id: input.caseId,
-                })
+                ctx.supabase
+                    .from('notifications')
+                    .insert({
+                        user_id: existing.client_id,
+                        type: 'VERDICT',
+                        title: 'Your case verdict is in',
+                        body: `Your case outcome: ${input.outcome}. You can now leave a review for your lawyer.`,
+                        case_id: input.caseId,
+                    }),
+            ])
 
             // Recalculate lawyer win rate
-            const { createCallerFactory } = await import('../init')
-            const { lawyerRouter } = await import('./lawyer.router')
-            const createCaller = createCallerFactory(lawyerRouter)
-            const serverCaller = createCaller(ctx)
-            await serverCaller.updateWinRate({ lawyerId: existing.lawyer_id })
+            try {
+                const { createCallerFactory } = await import('../init')
+                const { lawyerRouter } = await import('./lawyer.router')
+                const createCaller = createCallerFactory(lawyerRouter)
+                const serverCaller = createCaller(ctx)
+                await serverCaller.updateWinRate({ lawyerId: existing.lawyer_id })
+            } catch (err) {
+                console.error('Failed to update win rate after verdict:', err)
+            }
 
             return data
         }),
 
-    // ── Shared: get case timeline ──────────────────────────────────────────────
+    /** Shared: get case timeline */
     getTimeline: protectedProcedure
         .input(z.object({ caseId: z.string().uuid() }))
         .query(async ({ ctx, input }) => {
@@ -400,7 +405,7 @@ export const caseRouter = createTRPCRouter({
             // Ownership check scoped to role
             const { error: ownershipError } = await ctx.supabase
                 .from('cases')
-                .select('id', { count: 'exact', head: true })
+                .select('id')
                 .eq('id', input.caseId)
                 .eq(isLawyer ? 'lawyer_id' : 'client_id', ctx.userId)
                 .single()
@@ -428,7 +433,7 @@ export const caseRouter = createTRPCRouter({
             return data ?? []
         }),
 
-    // ── Shared: send message — used by both client and lawyer ─────────────────
+    /** Shared: send message — used by both client and lawyer */
     sendMessage: protectedProcedure
         .input(z.object({
             caseId: z.string().uuid(),
@@ -488,7 +493,7 @@ export const caseRouter = createTRPCRouter({
                     user_id: recipientId,
                     type: 'NEW_MESSAGE',
                     title: 'New message',
-                    body: 'You have a new message on your case',
+                    body: 'You have a new message on your case.',
                     case_id: input.caseId,
                 })
 

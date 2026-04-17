@@ -3,73 +3,66 @@ import { protectedProcedure, createTRPCRouter } from "../init";
 import { TRPCError } from "@trpc/server";
 
 export const notificationRouter = createTRPCRouter({
+    /** Get paginated notifications + unread count */
     getAllNotifications: protectedProcedure
-        .input(z.object({ page: z.number().min(1).default(1), limit: z.number().min(1).max(50).default(20) }))
+        .input(z.object({
+            page: z.number().min(1).default(1),
+            limit: z.number().min(1).max(50).default(20),
+        }))
         .query(async ({ ctx, input }) => {
             const offset = (input.page - 1) * input.limit
 
-            const { data, error } = await Promise.all([
+            // Run both queries in parallel, destructure as ARRAY
+            const [notifResult, unreadResult] = await Promise.all([
                 ctx.supabase
                     .from('notifications')
                     .select(`
-                    id,
-                    type,
-                    title,
-                    message,
-                    read,
-                    created_at,
-                    updated_at,
-                `)
+                        id,
+                        type,
+                        title,
+                        body,
+                        read,
+                        case_id,
+                        created_at
+                    `, { count: 'exact' })
                     .eq('user_id', ctx.userId)
-                    .order('is_read', { ascending: true })
+                    .order('read', { ascending: true })
                     .order('created_at', { ascending: false })
-                    .range(offset, offset + input.limit - 1)
-                    .select('*', { count: 'exact' }),
+                    .range(offset, offset + input.limit - 1),
 
                 ctx.supabase
                     .from('notifications')
-                    .select('*', { count: 'exact', head: true })
+                    .select('id', { count: 'exact', head: true })
                     .eq('user_id', ctx.userId)
-                    .eq('is_read', false)
-
+                    .eq('read', false),
             ])
 
-            if (error) {
+            if (notifResult.error) {
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to fetch notifications',
                 })
             }
 
-            const total = data?.[0]?.length
-            const totalPages = Math.ceil(total / input.limit)
-            const page = input.page
-
+            const total = notifResult.count ?? 0
             return {
-                notifications: data?.[0],
+                notifications: notifResult.data ?? [],
                 total,
-                page,
-                totalPages,
-                unreadCount: data?.[1]?.count,
+                page: input.page,
+                totalPages: Math.ceil(total / input.limit),
+                unreadCount: unreadResult.count ?? 0,
             }
         }),
 
+    /** Get unread notification count only */
     getUnreadCount: protectedProcedure
         .query(async ({ ctx }) => {
-            const { data, error } = await ctx.supabase
+            // Single select with head: true — returns count only, no rows
+            const { count, error } = await ctx.supabase
                 .from('notifications')
-                .select(`
-                    id,
-                    type,
-                    title,
-                    message,
-                    read,
-                    created_at,
-                    updated_at,
-                `)
+                .select('id', { count: 'exact', head: true })
                 .eq('user_id', ctx.userId)
-                .eq('is_read', false)
-                .select('*', { count: 'exact', head: true })
+                .eq('read', false)
 
             if (error) {
                 throw new TRPCError({
@@ -78,27 +71,19 @@ export const notificationRouter = createTRPCRouter({
                 })
             }
 
-            return {
-                unreadCount: data?.length,
-            }
+            return { unreadCount: count ?? 0 }
         }),
 
+    /** Mark a single notification as read */
     markRead: protectedProcedure
-        .input(z.object({ notificationId: z.uuid() }))
+        .input(z.object({ notificationId: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
             const { data, error } = await ctx.supabase
                 .from('notifications')
-                .update({ is_read: true })
+                .update({ read: true })
                 .eq('id', input.notificationId)
                 .eq('user_id', ctx.userId)
-                .select()
-
-            if (!data) {
-                throw new TRPCError({
-                    code: 'NOT_FOUND',
-                    message: 'Notification not found'
-                })
-            }
+                .select('id')
 
             if (error) {
                 throw new TRPCError({
@@ -107,20 +92,25 @@ export const notificationRouter = createTRPCRouter({
                 })
             }
 
-
-            return {
-                success: true
+            if (!data || data.length === 0) {
+                throw new TRPCError({
+                    code: 'NOT_FOUND',
+                    message: 'Notification not found',
+                })
             }
+
+            return { success: true }
         }),
 
+    /** Mark all notifications as read */
     markAllRead: protectedProcedure
         .mutation(async ({ ctx }) => {
-            const { data, error } = await ctx.supabase
+            const { count, error } = await ctx.supabase
                 .from('notifications')
-                .update({ is_read: true })
+                .update({ read: true })
                 .eq('user_id', ctx.userId)
-                .eq('is_read', false)
-                .select()
+                .eq('read', false)
+                .select('id', { count: 'exact', head: true })
 
             if (error) {
                 throw new TRPCError({
@@ -129,8 +119,6 @@ export const notificationRouter = createTRPCRouter({
                 })
             }
 
-            return {
-                updated: data?.length
-            }
-        })
+            return { updated: count ?? 0 }
+        }),
 })

@@ -1,56 +1,49 @@
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
-import { createTRPCRouter, clientProcedure, protectedProcedure, baseProcedure, adminProcedure } from '../init'
-import { lawyerRouter } from './lawyer.router'
-import { createCallerFactory } from '../init'
+import { createTRPCRouter, clientProcedure, createCallerFactory } from '../init'
 
-
-
-const CaseStatus = z.enum(['ACTIVE', 'IN_PROGRESS', 'HEARING_SET', 'COMPLETED', 'CANCELLED'])
-
-
-
+const CaseStatus = z.enum(['IN_PROGRESS', 'HEARING_SET', 'VERDICT', 'CLOSED'])
 
 export const clientRouter = createTRPCRouter({
 
+    /** Client dashboard — all summary stats in one call */
     getDashboardSummary: clientProcedure
         .query(async ({ ctx }) => {
             const [
-                { count: totalCases, error: e1 },
-                { count: activeCases, error: e2 },
-                { count: unreadNotifications, error: e3 },
-                { count: activeConnections, error: e4 },
-                { data: upcomingHearings, error: e5 },
+                casesResult,
+                activeCasesResult,
+                unreadResult,
+                connectionsResult,
+                hearingsResult,
             ] = await Promise.all([
-
                 // total cases ever
                 ctx.supabase
                     .from('cases')
-                    .select('*', { count: 'exact', head: true })
+                    .select('id', { count: 'exact', head: true })
                     .eq('client_id', ctx.userId),
 
                 // cases currently in progress
                 ctx.supabase
                     .from('cases')
-                    .select('*', { count: 'exact', head: true })
+                    .select('id', { count: 'exact', head: true })
                     .eq('client_id', ctx.userId)
                     .in('status', ['IN_PROGRESS', 'HEARING_SET']),
 
                 // unread notifications
                 ctx.supabase
                     .from('notifications')
-                    .select('*', { count: 'exact', head: true })
+                    .select('id', { count: 'exact', head: true })
                     .eq('user_id', ctx.userId)
                     .eq('read', false),
 
                 // active lawyer connections
                 ctx.supabase
                     .from('connections')
-                    .select('*', { count: 'exact', head: true })
+                    .select('id', { count: 'exact', head: true })
                     .eq('client_id', ctx.userId)
                     .eq('status', 'ACTIVE'),
 
-                // next 3 upcoming hearings with minimal fields
+                // next 3 upcoming hearings
                 ctx.supabase
                     .from('cases')
                     .select('id, title, next_hearing_at, status, lawyers(full_name)')
@@ -60,10 +53,10 @@ export const clientRouter = createTRPCRouter({
                     .gt('next_hearing_at', new Date().toISOString())
                     .order('next_hearing_at', { ascending: true })
                     .limit(3),
-
             ])
 
-            if (e1 || e2 || e3 || e4 || e5) {
+            if (casesResult.error || activeCasesResult.error || unreadResult.error ||
+                connectionsResult.error || hearingsResult.error) {
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to fetch dashboard summary',
@@ -71,43 +64,43 @@ export const clientRouter = createTRPCRouter({
             }
 
             return {
-                totalCases: totalCases ?? 0,
-                activeCases: activeCases ?? 0,
-                unreadNotifications: unreadNotifications ?? 0,
-                activeConnections: activeConnections ?? 0,
-                upcomingHearings: upcomingHearings ?? [],
+                totalCases: casesResult.count ?? 0,
+                activeCases: activeCasesResult.count ?? 0,
+                unreadNotifications: unreadResult.count ?? 0,
+                activeConnections: connectionsResult.count ?? 0,
+                upcomingHearings: hearingsResult.data ?? [],
             }
         }),
 
-
+    /** Get saved/bookmarked lawyers */
     getSavedLawyers: clientProcedure
         .query(async ({ ctx }) => {
             const { data, error } = await ctx.supabase
                 .from('saved_lawyers')
                 .select(`
+                    id,
+                    lawyer_id,
+                    saved_at,
+                    lawyers (
                         id,
-                        lawyer_id,
-                        saved_at,
-                        lawyers(
-                            id,
-                            full_name,
-                            bio,
-                            city,
-                            state,
-                            specializations,
-                            court_levels,
-                            fee_per_consultation,
-                            years_of_experience,
-                            win_rate,
-                            total_cases,
-                            avg_rating,
-                            review_count,
-                            verified,
-                            languages_spoken,
-                            created_at,
-                            users!inner ( email )
-                        )
-                    `)
+                        full_name,
+                        bio,
+                        city,
+                        state,
+                        specializations,
+                        court_levels,
+                        fee_per_consultation,
+                        years_of_experience,
+                        win_rate,
+                        total_cases,
+                        avg_rating,
+                        review_count,
+                        verified,
+                        languages_spoken,
+                        created_at,
+                        users!inner ( email )
+                    )
+                `)
                 .eq('client_id', ctx.userId)
                 .order('saved_at', { ascending: false })
 
@@ -121,42 +114,48 @@ export const clientRouter = createTRPCRouter({
             return data ?? []
         }),
 
+    /** Get client's connections with optional status filter */
     getMyConnections: clientProcedure
-        .input(z.object({ status: z.enum(['PENDING', 'ACTIVE', 'DECLINED']).optional() }))
+        .input(z.object({
+            status: z.enum(['PENDING', 'ACTIVE', 'DECLINED']).optional(),
+        }))
         .query(async ({ ctx, input }) => {
-            let { data, error } = ctx.supabase
+            // Build query first, THEN await — fixed the missing await + broken .eq() on data
+            let query = ctx.supabase
                 .from('connections')
                 .select(`
+                    id,
+                    lawyer_id,
+                    status,
+                    created_at,
+                    lawyers (
                         id,
-                        lawyer_id,
-                        status,
-                        connected_at,
-                        lawyers(
-                            id,
-                            full_name,
-                            bio,
-                            city,
-                            state,
-                            specializations,
-                            court_levels,
-                            fee_per_consultation,
-                            years_of_experience,
-                            win_rate,
-                            total_cases,
-                            avg_rating,
-                            review_count,
-                            verified,
-                            languages_spoken,
-                            created_at,
-                            users!inner ( email )
-                        )
-                    `)
+                        full_name,
+                        bio,
+                        city,
+                        state,
+                        specializations,
+                        court_levels,
+                        fee_per_consultation,
+                        years_of_experience,
+                        win_rate,
+                        total_cases,
+                        avg_rating,
+                        review_count,
+                        verified,
+                        languages_spoken,
+                        created_at,
+                        users!inner ( email )
+                    )
+                `)
                 .eq('client_id', ctx.userId)
-                .order('connected_at', { ascending: false })
+                .order('created_at', { ascending: false })
 
             if (input.status) {
-                data = data.eq('status', input.status)
+                query = query.eq('status', input.status)
             }
+
+            const { data, error } = await query
 
             if (error) {
                 throw new TRPCError({
@@ -168,15 +167,16 @@ export const clientRouter = createTRPCRouter({
             return data ?? []
         }),
 
+    /** Check connection status with a specific lawyer */
     getConnectionStatus: clientProcedure
-        .input(z.object({ lawyerId: z.uuid() }))
+        .input(z.object({ lawyerId: z.string().uuid() }))
         .query(async ({ ctx, input }) => {
             const { data, error } = await ctx.supabase
                 .from('connections')
                 .select('status')
                 .eq('client_id', ctx.userId)
                 .eq('lawyer_id', input.lawyerId)
-                .single()
+                .maybeSingle()
 
             if (error) {
                 throw new TRPCError({
@@ -188,55 +188,37 @@ export const clientRouter = createTRPCRouter({
             return data?.status ?? null
         }),
 
-    // initiatePayment: clientProcedure
-    //     .input(z.object({ lawyerId: z.uuid() }))
-    //     .query(async ({ ctx, input }) => {
-    //         const { data, error } = await ctx.supabase
-    //             .from('payments')
-    //             .insert({
-    //                 client_id: ctx.userId,
-    //                 lawyer_id: input.lawyerId,
-    //                 amount: 100,
-    //                 status: 'PENDING',
-    //             })
-    //             .select()
-    //             .single()
-
-    //         if (error) {
-    //             throw new TRPCError({
-    //                 code: 'INTERNAL_SERVER_ERROR',
-    //                 message: 'Failed to initiate payment',
-    //             })
-    //         }
-
-    //         return data
-    //     }),                                      need to configure still
-
+    /** Get client's cases with optional status filter and pagination */
     getMyCases: clientProcedure
-        .input(z.object({ status: CaseStatus.optional(), page: z.number().default(1), limit: z.number().default(10) }))
+        .input(z.object({
+            status: CaseStatus.optional(),
+            page: z.number().min(1).default(1),
+            limit: z.number().min(1).max(20).default(10),
+        }))
         .query(async ({ ctx, input }) => {
             const offset = (input.page - 1) * input.limit
-            let dbQuery = ctx.supabase
+
+            let query = ctx.supabase
                 .from('cases')
                 .select(`
-                        id,
-                        title,
-                        category,
-                        status,
-                        next_hearing_at,
-                        e_token,
-                        created_at,
-                        lawyers( full_name )
-                    `, { count: 'exact' })
+                    id,
+                    title,
+                    category,
+                    status,
+                    next_hearing_at,
+                    e_token,
+                    created_at,
+                    lawyers ( full_name )
+                `, { count: 'exact' })
                 .eq('client_id', ctx.userId)
                 .order('created_at', { ascending: false })
                 .range(offset, offset + input.limit - 1)
 
             if (input.status) {
-                dbQuery = dbQuery.eq('status', input.status)
+                query = query.eq('status', input.status)
             }
 
-            const { data, count, error } = await dbQuery
+            const { data, count, error } = await query
 
             if (error) {
                 throw new TRPCError({
@@ -254,14 +236,15 @@ export const clientRouter = createTRPCRouter({
             }
         }),
 
+    /** Get full case details by ID */
     getCaseById: clientProcedure
-        .input(z.object({ caseId: z.uuid() }))
+        .input(z.object({ caseId: z.string().uuid() }))
         .query(async ({ ctx, input }) => {
             const { data, error } = await ctx.supabase
                 .from('cases')
                 .select(`
                     *,
-                    lawyers(
+                    lawyers (
                         id,
                         full_name,
                         bio,
@@ -280,7 +263,7 @@ export const clientRouter = createTRPCRouter({
                         created_at,
                         users!inner ( email )
                     ),
-                    e_tokens(*)
+                    e_tokens (*)
                 `)
                 .eq('id', input.caseId)
                 .eq('client_id', ctx.userId)
@@ -296,13 +279,14 @@ export const clientRouter = createTRPCRouter({
             return data
         }),
 
+    /** Get timeline events for a case */
     getCaseTimeline: clientProcedure
-        .input(z.object({ caseId: z.uuid() }))
+        .input(z.object({ caseId: z.string().uuid() }))
         .query(async ({ ctx, input }) => {
-            // 1. Ownership check
+            // Ownership check
             const { error: ownershipError } = await ctx.supabase
                 .from('cases')
-                .select('id', { count: 'exact', head: true })
+                .select('id')
                 .eq('id', input.caseId)
                 .eq('client_id', ctx.userId)
                 .single()
@@ -314,16 +298,9 @@ export const clientRouter = createTRPCRouter({
                 })
             }
 
-            // 2. Fetch timeline events
             const { data, error } = await ctx.supabase
                 .from('case_timeline')
-                .select(`
-                    id,
-                    event_type,
-                    description,
-                    created_by,
-                    created_at
-                `)
+                .select('id, event_type, description, created_by, created_at')
                 .eq('case_id', input.caseId)
                 .order('created_at', { ascending: true })
 
@@ -337,15 +314,20 @@ export const clientRouter = createTRPCRouter({
             return data ?? []
         }),
 
+    /** Get paginated messages for a case */
     getCaseMessages: clientProcedure
-        .input(z.object({ caseId: z.uuid(), page: z.number().default(1), limit: z.number().default(30) }))
+        .input(z.object({
+            caseId: z.string().uuid(),
+            page: z.number().min(1).default(1),
+            limit: z.number().min(1).max(50).default(30),
+        }))
         .query(async ({ ctx, input }) => {
             const offset = (input.page - 1) * input.limit
 
-            // 1. Ownership check
+            // Ownership check
             const { error: ownershipError } = await ctx.supabase
                 .from('cases')
-                .select('id', { count: 'exact', head: true })
+                .select('id')
                 .eq('id', input.caseId)
                 .eq('client_id', ctx.userId)
                 .single()
@@ -357,7 +339,6 @@ export const clientRouter = createTRPCRouter({
                 })
             }
 
-            // 2. Fetch messages with sender name, ordered DESC (newest first for pagination)
             const { data, count, error } = await ctx.supabase
                 .from('case_messages')
                 .select(`
@@ -365,7 +346,7 @@ export const clientRouter = createTRPCRouter({
                     content,
                     created_at,
                     sender_id,
-                    users( full_name )
+                    users ( full_name )
                 `, { count: 'exact' })
                 .eq('case_id', input.caseId)
                 .order('created_at', { ascending: false })
@@ -389,10 +370,14 @@ export const clientRouter = createTRPCRouter({
             }
         }),
 
+    /** Send a message on a case */
     sendMessage: clientProcedure
-        .input(z.object({ caseId: z.uuid(), body: z.string().min(1).max(2000) }))
+        .input(z.object({
+            caseId: z.string().uuid(),
+            body: z.string().min(1).max(2000),
+        }))
         .mutation(async ({ ctx, input }) => {
-            // 1. Verify ownership and case is not CLOSED
+            // Verify ownership and case is open
             const { data: caseData, error: caseError } = await ctx.supabase
                 .from('cases')
                 .select('id, status, lawyer_id')
@@ -414,10 +399,9 @@ export const clientRouter = createTRPCRouter({
                 })
             }
 
-            // 2. Sanitize body — strip HTML tags to prevent XSS
+            // Strip HTML to prevent XSS
             const sanitizedBody = input.body.replace(/<[^>]*>/g, '')
 
-            // 3. Insert message
             const { data: message, error: msgError } = await ctx.supabase
                 .from('case_messages')
                 .insert({
@@ -435,27 +419,28 @@ export const clientRouter = createTRPCRouter({
                 })
             }
 
-            // 4. Create notification for the lawyer
+            // Notify the lawyer (fixed: was using 'message' field, DB has 'title'+'body')
             await ctx.supabase
                 .from('notifications')
                 .insert({
                     user_id: caseData.lawyer_id,
                     type: 'NEW_MESSAGE',
-                    message: 'You have a new message from your client',
+                    title: 'New message',
+                    body: 'You have a new message from your client.',
                     case_id: input.caseId,
                 })
 
             return message
         }),
 
-
+    /** Get documents for a case (excludes soft-deleted) */
     getCaseDocuments: clientProcedure
-        .input(z.object({ caseId: z.uuid() }))
+        .input(z.object({ caseId: z.string().uuid() }))
         .query(async ({ ctx, input }) => {
-            // 1. Ownership check
+            // Ownership check
             const { error: ownershipError } = await ctx.supabase
                 .from('cases')
-                .select('id', { count: 'exact', head: true })
+                .select('id')
                 .eq('id', input.caseId)
                 .eq('client_id', ctx.userId)
                 .single()
@@ -467,7 +452,6 @@ export const clientRouter = createTRPCRouter({
                 })
             }
 
-            // 2. Fetch documents (exclude soft-deleted)
             const { data, error } = await ctx.supabase
                 .from('documents')
                 .select(`
@@ -493,16 +477,11 @@ export const clientRouter = createTRPCRouter({
             return data ?? []
         }),
 
+    /** Get access log for a specific document */
     getDocumentAccessLog: clientProcedure
-        .input(z.object({ documentId: z.uuid() }))
+        .input(z.object({ documentId: z.string().uuid() }))
         .query(async ({ ctx, input }) => {
-
-            // STEP 1: Ownership check via join
-            // ---------------------------------
-            // documents doesn't have client_id — ownership lives on the cases table.
-            // Chain: documents.case_id → cases.id → cases.client_id
-            // We use cases!inner() so the query returns NOTHING if the case
-            // doesn't belong to this client (INNER JOIN = must match).
+            // Ownership check via document → case → client_id
             const { error: ownershipError } = await ctx.supabase
                 .from('documents')
                 .select('id, cases!inner( client_id )')
@@ -517,17 +496,9 @@ export const clientRouter = createTRPCRouter({
                 })
             }
 
-            // STEP 2: Fetch the access log
-            // ---------------------------------
-            // Now that we've confirmed ownership, query the access log.
-            // Join to users via accessed_by FK to get the person's name.
             const { data, error } = await ctx.supabase
                 .from('document_access_log')
-                .select(`
-                    accessed_by_name,
-                    accessed_at,
-                    ip_address
-                `)
+                .select('accessed_by, accessed_at, ip_address')
                 .eq('document_id', input.documentId)
                 .order('accessed_at', { ascending: false })
 
@@ -541,24 +512,21 @@ export const clientRouter = createTRPCRouter({
             return data ?? []
         }),
 
+    /** Get notifications with pagination and unread count */
     getNotifications: clientProcedure
-        .input(z.object({ page: z.number().default(1), limit: z.number().default(20) }))
+        .input(z.object({
+            page: z.number().min(1).default(1),
+            limit: z.number().min(1).max(50).default(20),
+        }))
         .query(async ({ ctx, input }) => {
             const offset = (input.page - 1) * input.limit
 
-            // Fetch notifications (paginated) + unread count in parallel
             const [notifResult, unreadResult] = await Promise.all([
                 ctx.supabase
                     .from('notifications')
-                    .select(`
-                        id,
-                        type,
-                        message,
-                        created_at,
-                        is_read
-                    `, { count: 'exact' })
+                    .select('id, type, title, body, read, created_at', { count: 'exact' })
                     .eq('user_id', ctx.userId)
-                    .order('is_read', { ascending: true })
+                    .order('read', { ascending: true })
                     .order('created_at', { ascending: false })
                     .range(offset, offset + input.limit - 1),
 
@@ -566,7 +534,7 @@ export const clientRouter = createTRPCRouter({
                     .from('notifications')
                     .select('id', { count: 'exact', head: true })
                     .eq('user_id', ctx.userId)
-                    .eq('is_read', false),
+                    .eq('read', false),
             ])
 
             if (notifResult.error) {
@@ -584,14 +552,14 @@ export const clientRouter = createTRPCRouter({
             }
         }),
 
+    /** Get unread notification count */
     getUnreadCount: clientProcedure
         .query(async ({ ctx }) => {
-            // head: true = don't return rows, just count them
             const { count, error } = await ctx.supabase
                 .from('notifications')
                 .select('id', { count: 'exact', head: true })
                 .eq('user_id', ctx.userId)
-                .eq('is_read', false)
+                .eq('read', false)
 
             if (error) {
                 throw new TRPCError({
@@ -603,16 +571,17 @@ export const clientRouter = createTRPCRouter({
             return { unreadCount: count ?? 0 }
         }),
 
+    /** Mark a single notification as read */
     markNotificationRead: clientProcedure
-        .input(z.object({ notificationId: z.uuid() }))
+        .input(z.object({ notificationId: z.string().uuid() }))
         .mutation(async ({ ctx, input }) => {
-            const { error: updateError } = await ctx.supabase
+            const { error } = await ctx.supabase
                 .from('notifications')
-                .update({ is_read: true })
+                .update({ read: true })
                 .eq('id', input.notificationId)
                 .eq('user_id', ctx.userId)
 
-            if (updateError) {
+            if (error) {
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to mark notification as read',
@@ -622,16 +591,17 @@ export const clientRouter = createTRPCRouter({
             return { success: true }
         }),
 
+    /** Mark all notifications as read */
     markAllNotificationsRead: clientProcedure
         .mutation(async ({ ctx }) => {
-            const { count, error: updateError } = await ctx.supabase
+            const { count, error } = await ctx.supabase
                 .from('notifications')
-                .update({ is_read: true })
+                .update({ read: true })
                 .eq('user_id', ctx.userId)
-                .eq('is_read', false)
+                .eq('read', false)
                 .select('id', { count: 'exact', head: true })
 
-            if (updateError) {
+            if (error) {
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to mark all notifications as read',
@@ -641,10 +611,16 @@ export const clientRouter = createTRPCRouter({
             return { updated: count ?? 0 }
         }),
 
+    /** Submit a review for a closed case */
     submitReview: clientProcedure
-        .input(z.object({ caseId: z.uuid(), rating: z.number().min(1).max(5).int(), outcome: z.enum(['WON', 'LOST', 'SETTLED']), body: z.string().min(10).max(1000) }))
+        .input(z.object({
+            caseId: z.string().uuid(),
+            rating: z.number().min(1).max(5).int(),
+            outcome: z.enum(['WON', 'LOST', 'SETTLED']),
+            body: z.string().min(10).max(1000),
+        }))
         .mutation(async ({ ctx, input }) => {
-            // Guard 1: Ownership + fetch case data
+            // 1. Ownership + fetch case data
             const { data: caseData, error: caseError } = await ctx.supabase
                 .from('cases')
                 .select('id, status, lawyer_id')
@@ -659,21 +635,20 @@ export const clientRouter = createTRPCRouter({
                 })
             }
 
-            // Guard 2: Case must be CLOSED
             if (caseData.status !== 'CLOSED') {
                 throw new TRPCError({
-                    code: 'FORBIDDEN',
+                    code: 'BAD_REQUEST',
                     message: 'Reviews can only be submitted for closed cases',
                 })
             }
 
-            // Guard 3: No duplicate review for this case from this client
+            // 2. Duplicate check
             const { data: existingReview } = await ctx.supabase
                 .from('reviews')
                 .select('id')
                 .eq('case_id', input.caseId)
                 .eq('reviewer_id', ctx.userId)
-                .single()
+                .maybeSingle()
 
             if (existingReview) {
                 throw new TRPCError({
@@ -682,7 +657,7 @@ export const clientRouter = createTRPCRouter({
                 })
             }
 
-            // Insert the review
+            // 3. Insert
             const { data: review, error: reviewError } = await ctx.supabase
                 .from('reviews')
                 .insert({
@@ -703,24 +678,31 @@ export const clientRouter = createTRPCRouter({
                 })
             }
 
-            // Recalculate lawyer's avg rating via server-side caller
-
-            const createCaller = createCallerFactory(lawyerRouter)
-            const serverCaller = createCaller(ctx)
-            await serverCaller.recalculateRating({ lawyerId: caseData.lawyer_id })
+            // 4. Recalculate lawyer rating
+            try {
+                const { lawyerRouter } = await import('./lawyer.router')
+                const createCaller = createCallerFactory(lawyerRouter)
+                const serverCaller = createCaller(ctx)
+                await serverCaller.recalculateRating({ lawyerId: caseData.lawyer_id })
+            } catch (err) {
+                console.error('Failed to recalculate rating:', err)
+            }
 
             return review
         }),
 
+    /** Get reviews the client has submitted */
     getMyReviews: clientProcedure
-        .input(z.object({ page: z.number().min(1).default(1), limit: z.number().min(1).max(20).default(10), }).optional())
+        .input(z.object({
+            page: z.number().min(1).default(1),
+            limit: z.number().min(1).max(20).default(10),
+        }).optional())
         .query(async ({ ctx, input }) => {
-
             const page = input?.page ?? 1
             const limit = input?.limit ?? 10
             const offset = (page - 1) * limit
 
-            const { data: reviews, error: reviewError } = await ctx.supabase
+            const { data, error } = await ctx.supabase
                 .from('reviews')
                 .select(`
                     id,
@@ -728,15 +710,13 @@ export const clientRouter = createTRPCRouter({
                     outcome,
                     body,
                     created_at,
-                    updated_at,
-                    case: cases (
+                    cases (
                         id,
                         title,
                         category,
-                        court_level,
-                        created_at,
+                        created_at
                     ),
-                    lawyer: lawyers (
+                    lawyers (
                         id,
                         full_name,
                         specializations,
@@ -750,17 +730,21 @@ export const clientRouter = createTRPCRouter({
                 .order('created_at', { ascending: false })
                 .range(offset, offset + limit - 1)
 
-            if (reviewError) {
-                throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to fetch reviews' })
+            if (error) {
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to fetch reviews',
+                })
             }
 
-            return reviews ?? []
+            return data ?? []
         }),
 
+    /** Get client's own profile */
     getMyProfile: clientProcedure
         .query(async ({ ctx }) => {
-            const { data: profile, error: profileError } = await ctx.supabase
-                .from('clients')
+            const { data, error } = await ctx.supabase
+                .from('users')
                 .select(`
                     id,
                     full_name,
@@ -771,25 +755,32 @@ export const clientRouter = createTRPCRouter({
                     created_at,
                     updated_at
                 `)
-                .eq('user_id', ctx.userId)
+                .eq('id', ctx.userId)
                 .single()
 
-            if (profileError || !profile) {
+            if (error || !data) {
                 throw new TRPCError({
                     code: 'NOT_FOUND',
                     message: 'Profile not found',
                 })
             }
 
-            return profile
+            return data
         }),
 
+    /** Update client's profile */
     updateMyProfile: clientProcedure
-        .input(z.object({ full_name: z.string().min(2).optional(), phone: z.string().regex(/^[6-9]\d{9}$/).optional(), city: z.string().optional(), state: z.string().optional() }))
+        .input(z.object({
+            full_name: z.string().min(2).optional(),
+            phone: z.string().regex(/^[6-9]\d{9}$/).optional(),
+            city: z.string().optional(),
+            state: z.string().optional(),
+        }))
         .mutation(async ({ ctx, input }) => {
+            // Build payload with correct DB column names
             const updatePayload: Record<string, unknown> = {}
 
-            if (input.full_name !== undefined) updatePayload.fullName = input.full_name
+            if (input.full_name !== undefined) updatePayload.full_name = input.full_name
             if (input.phone !== undefined) updatePayload.phone = input.phone
             if (input.city !== undefined) updatePayload.city = input.city
             if (input.state !== undefined) updatePayload.state = input.state
@@ -801,20 +792,20 @@ export const clientRouter = createTRPCRouter({
                 })
             }
 
-            const { data: updatedProfile, error: updateError } = await ctx.supabase
-                .from('clients')
+            const { data, error } = await ctx.supabase
+                .from('users')
                 .update(updatePayload)
-                .eq('user_id', ctx.userId)
+                .eq('id', ctx.userId)
                 .select()
                 .single()
 
-            if (updateError || !updatedProfile) {
+            if (error || !data) {
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to update profile',
                 })
             }
 
-            return updatedProfile
-        })
+            return data
+        }),
 })
