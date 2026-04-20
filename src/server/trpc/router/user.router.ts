@@ -139,7 +139,7 @@ export const userRouter = createTRPCRouter({
                 const totalCases = casesResult.count ?? 0
                 // Filter active cases from the data (cases that are not CLOSED)
                 const activeCases = casesResult.data?.filter(
-                    c => c.status !== 'CLOSED'
+                    (c: { status: string }) => c.status !== 'CLOSED'
                 ).length ?? 0
 
                 return {
@@ -175,10 +175,10 @@ export const userRouter = createTRPCRouter({
 
                 const totalCases = casesResult.count ?? 0
                 const activeCases = casesResult.data?.filter(
-                    c => c.status !== 'CLOSED'
+                    (c: { status: string }) => c.status !== 'CLOSED'
                 ).length ?? 0
                 const pendingConnections = connectionsResult.data?.filter(
-                    c => c.status === 'PENDING'
+                    (c: { status: string }) => c.status === 'PENDING'
                 ).length ?? 0
 
                 return {

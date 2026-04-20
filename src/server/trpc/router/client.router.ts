@@ -169,7 +169,7 @@ export const clientRouter = createTRPCRouter({
 
     /** Check connection status with a specific lawyer */
     getConnectionStatus: clientProcedure
-        .input(z.object({ lawyerId: z.string().uuid() }))
+        .input(z.object({ lawyerId: z.uuid() }))
         .query(async ({ ctx, input }) => {
             const { data, error } = await ctx.supabase
                 .from('connections')
@@ -238,7 +238,7 @@ export const clientRouter = createTRPCRouter({
 
     /** Get full case details by ID */
     getCaseById: clientProcedure
-        .input(z.object({ caseId: z.string().uuid() }))
+        .input(z.object({ caseId: z.uuid() }))
         .query(async ({ ctx, input }) => {
             const { data, error } = await ctx.supabase
                 .from('cases')
@@ -281,7 +281,7 @@ export const clientRouter = createTRPCRouter({
 
     /** Get timeline events for a case */
     getCaseTimeline: clientProcedure
-        .input(z.object({ caseId: z.string().uuid() }))
+        .input(z.object({ caseId: z.uuid() }))
         .query(async ({ ctx, input }) => {
             // Ownership check
             const { error: ownershipError } = await ctx.supabase
@@ -317,7 +317,7 @@ export const clientRouter = createTRPCRouter({
     /** Get paginated messages for a case */
     getCaseMessages: clientProcedure
         .input(z.object({
-            caseId: z.string().uuid(),
+            caseId: z.uuid(),
             page: z.number().min(1).default(1),
             limit: z.number().min(1).max(50).default(30),
         }))
@@ -373,7 +373,7 @@ export const clientRouter = createTRPCRouter({
     /** Send a message on a case */
     sendMessage: clientProcedure
         .input(z.object({
-            caseId: z.string().uuid(),
+            caseId: z.uuid(),
             body: z.string().min(1).max(2000),
         }))
         .mutation(async ({ ctx, input }) => {
@@ -435,7 +435,7 @@ export const clientRouter = createTRPCRouter({
 
     /** Get documents for a case (excludes soft-deleted) */
     getCaseDocuments: clientProcedure
-        .input(z.object({ caseId: z.string().uuid() }))
+        .input(z.object({ caseId: z.uuid() }))
         .query(async ({ ctx, input }) => {
             // Ownership check
             const { error: ownershipError } = await ctx.supabase
@@ -479,7 +479,7 @@ export const clientRouter = createTRPCRouter({
 
     /** Get access log for a specific document */
     getDocumentAccessLog: clientProcedure
-        .input(z.object({ documentId: z.string().uuid() }))
+        .input(z.object({ documentId: z.uuid() }))
         .query(async ({ ctx, input }) => {
             // Ownership check via document → case → client_id
             const { error: ownershipError } = await ctx.supabase
@@ -573,7 +573,7 @@ export const clientRouter = createTRPCRouter({
 
     /** Mark a single notification as read */
     markNotificationRead: clientProcedure
-        .input(z.object({ notificationId: z.string().uuid() }))
+        .input(z.object({ notificationId: z.uuid() }))
         .mutation(async ({ ctx, input }) => {
             const { error } = await ctx.supabase
                 .from('notifications')
@@ -614,7 +614,7 @@ export const clientRouter = createTRPCRouter({
     /** Submit a review for a closed case */
     submitReview: clientProcedure
         .input(z.object({
-            caseId: z.string().uuid(),
+            caseId: z.uuid(),
             rating: z.number().min(1).max(5).int(),
             outcome: z.enum(['WON', 'LOST', 'SETTLED']),
             body: z.string().min(10).max(1000),

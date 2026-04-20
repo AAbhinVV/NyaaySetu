@@ -264,7 +264,29 @@ export const lawyerRouter = createTRPCRouter({
     getMyProfile: lawyerProcedure.query(async ({ ctx }) => {
         const { data, error } = await ctx.supabase
             .from('lawyers')
-            .select('*')
+            .select(`
+                id,
+                user_id,
+                bar_council_id,
+                full_name,
+                bio,
+                phone,
+                city,
+                state,
+                specializations,
+                court_levels,
+                fee_per_consultation,
+                years_of_experience,
+                win_rate,
+                total_cases,
+                avg_rating,
+                review_count,
+                verified,
+                verification_status,
+                languages_spoken,
+                created_at,
+                updated_at
+            `)
             .eq('user_id', ctx.userId)
             .single()
 
@@ -451,7 +473,7 @@ export const lawyerRouter = createTRPCRouter({
             }
 
             const total = stats?.length ?? 0
-            const won = stats?.filter((c: any) => c.verdict_outcome === 'WON').length ?? 0
+            const won = stats?.filter((c: { verdict_outcome: string | null }) => c.verdict_outcome === 'WON').length ?? 0
             const winRate = total > 0 ? Math.round((won / total) * 100) : 0
 
             const { data, error } = await ctx.supabase
@@ -497,7 +519,7 @@ export const lawyerRouter = createTRPCRouter({
                 count > 0
                     ? parseFloat(
                         (
-                            reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / count
+                            reviews.reduce((sum: number, r: { rating: number }) => sum + r.rating, 0) / count
                         ).toFixed(2)
                     )
                     : 0
