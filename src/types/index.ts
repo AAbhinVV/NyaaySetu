@@ -28,7 +28,7 @@ export interface TransparencyItem {
 
 // ─── Case ────────────────────────────────────────────────────────────────────
 
-export type CaseStatus = "ACTIVE" | "HEARING_SET" | "VERDICT" | "CLOSED";
+export type CaseStatus = "IN_PROGRESS" | "HEARING_SET" | "VERDICT" | "CLOSED";
 
 export interface Case {
     id: string;

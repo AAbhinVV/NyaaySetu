@@ -11,9 +11,9 @@ export const connectionRouter = createTRPCRouter({
     createConnection: clientProcedure
         .input(z.object({
             lawyerId: z.uuid(),
-            razorpayOrderId: z.string(),
-            razorpayPaymentId: z.string(),
-            razorpayPaymentAmount: z.number(),
+            stripeSessionId: z.string(),
+            stripePaymentIntentId: z.string(),
+            amount: z.number(),
         }))
         .mutation(async ({ ctx, input }) => {
             // 1. Check for existing active/pending connection
@@ -62,9 +62,9 @@ export const connectionRouter = createTRPCRouter({
                 .insert({
                     connection_id: connection.id,
                     client_id: ctx.userId,
-                    razorpay_order_id: input.razorpayOrderId,
-                    razorpay_payment_id: input.razorpayPaymentId,
-                    amount: input.razorpayPaymentAmount,
+                    stripe_checkout_session_id: input.stripeSessionId,
+                    stripe_payment_intent_id: input.stripePaymentIntentId,
+                    amount: input.amount,
                     status: 'CAPTURED',
                 })
 
@@ -262,7 +262,7 @@ export const connectionRouter = createTRPCRouter({
                         id,
                         status,
                         amount,
-                        razorpay_payment_id
+                        stripe_payment_intent_id
                     )
                 `, { count: 'exact' })
                 .eq('lawyer_id', ctx.userId)

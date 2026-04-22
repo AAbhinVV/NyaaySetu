@@ -67,7 +67,7 @@ export const documentRouter = createTRPCRouter({
                     id,
                     file_name,
                     file_url,
-                    sha256_hash,
+                    sha512_hash,
                     chain_tx_id,
                     uploaded_by,
                     created_at,
@@ -97,7 +97,7 @@ export const documentRouter = createTRPCRouter({
             caseId: z.uuid(),
             fileName: z.string().min(1),
             fileUrl: z.url(),
-            sha256Hash: z.string().length(64),
+            sha512Hash: z.string().length(128),
             chainTxId: z.string().min(1),
         }))
         .mutation(async ({ ctx, input }) => {
@@ -119,7 +119,7 @@ export const documentRouter = createTRPCRouter({
                     case_id: input.caseId,
                     file_name: input.fileName,
                     file_url: input.fileUrl,
-                    sha256_hash: input.sha256Hash,
+                    sha512_hash: input.sha512Hash,
                     chain_tx_id: input.chainTxId,
                     uploaded_by: ctx.userId,
                 })

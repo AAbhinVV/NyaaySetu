@@ -246,7 +246,7 @@ create table documents (
   case_id         uuid not null references cases(id) on delete cascade,
   file_name       text not null,
   file_url        text not null,
-  sha256_hash     char(64) not null, -- SHA-256 hex is always exactly 64 chars
+  sha512_hash     char(128) not null, -- SHA-512 hex is always exactly 128 chars
   chain_tx_id     text not null,     -- Polygon transaction ID
   uploaded_by     uuid not null references users(id) on delete cascade,
   deleted_at      timestamptz,       -- soft delete

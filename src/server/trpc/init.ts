@@ -11,6 +11,15 @@ export const createTRPCContext = cache(async () => {
     const { userId, sessionClaims } = await auth()
     const supabase = await createServerClient()
 
+    // Set user ID in Supabase session config so RLS policies work.
+    // Without this, all RLS-protected queries return zero rows.
+    if (userId) {
+        await supabase.rpc('set_config', {
+            setting: 'app.user_id',
+            value: userId,
+        })
+    }
+
     return {
         userId,
         role: (sessionClaims?.metadata as { role?: string })?.role ?? null,

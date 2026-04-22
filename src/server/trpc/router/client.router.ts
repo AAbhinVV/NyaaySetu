@@ -458,7 +458,7 @@ export const clientRouter = createTRPCRouter({
                     id,
                     file_name,
                     file_url,
-                    sha256_hash,
+                    sha512_hash,
                     chain_tx_id,
                     uploaded_by,
                     created_at
@@ -596,10 +596,9 @@ export const clientRouter = createTRPCRouter({
         .mutation(async ({ ctx }) => {
             const { count, error } = await ctx.supabase
                 .from('notifications')
-                .update({ read: true })
+                .update({ read: true }, { count: 'exact' })
                 .eq('user_id', ctx.userId)
                 .eq('read', false)
-                .select('id', { count: 'exact', head: true })
 
             if (error) {
                 throw new TRPCError({

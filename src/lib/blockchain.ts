@@ -1,64 +1,98 @@
 import { createHash } from 'crypto'
 import { ethers } from 'ethers'
 
-const polygon_url = process.env.POLYGON_RPC_URL
-const blockchain_private_key = process.env.BLOCKCHAIN_PRIVATE_KEY
-const contract_address = process.env.CONTRACT_ADDRESS
+// ─── Lazy-loaded singletons ─────────────────────────────────────────────────
+// Not initialized at module load to prevent crashes when blockchain env vars
+// are not set (e.g., during tests or in environments that don't use blockchain)
 
-if (!polygon_url || !blockchain_private_key || !contract_address) {
-    throw new Error('Missing blockchain environment variables')
+let _provider: ethers.JsonRpcProvider | null = null
+let _signer: ethers.Wallet | null = null
+let _contract: ethers.Contract | null = null
+
+function getBlockchainConfig() {
+    const polygonUrl = process.env.POLYGON_RPC_URL
+    const privateKey = process.env.BLOCKCHAIN_PRIVATE_KEY
+    const contractAddress = process.env.CONTRACT_ADDRESS
+
+    if (!polygonUrl || !privateKey || !contractAddress) {
+        throw new Error(
+            'Missing blockchain environment variables: POLYGON_RPC_URL, BLOCKCHAIN_PRIVATE_KEY, CONTRACT_ADDRESS'
+        )
+    }
+
+    return { polygonUrl, privateKey, contractAddress }
 }
 
 // Minimal ABI — only the functions we use
 const CONTRACT_ABI = [
-    'function storeHash(string documentId, bytes64 hash) external',
-    'function verifyHash(string documentId, bytes64 hash) external view returns (bool)',
+    'function storeHash(string documentId, bytes hash) external',
+    'function verifyHash(string documentId, bytes hash) external view returns (bool)',
 ]
 
-function getProvider() {
-    return new ethers.JsonRpcProvider(polygon_url)
+function getProvider(): ethers.JsonRpcProvider {
+    if (!_provider) {
+        const { polygonUrl } = getBlockchainConfig()
+        _provider = new ethers.JsonRpcProvider(polygonUrl)
+    }
+    return _provider
 }
 
-function getSigner() {
-    const provider = getProvider()
-    return new ethers.Wallet(blockchain_private_key!, provider)
+function getSigner(): ethers.Wallet {
+    if (!_signer) {
+        const { privateKey } = getBlockchainConfig()
+        _signer = new ethers.Wallet(privateKey, getProvider())
+    }
+    return _signer
 }
 
-function getContract() {
-    const signer = getSigner()
-    return new ethers.Contract(
-        contract_address!,
-        CONTRACT_ABI,
-        signer
-    )
+function getContract(): ethers.Contract {
+    if (!_contract) {
+        const { contractAddress } = getBlockchainConfig()
+        _contract = new ethers.Contract(contractAddress, CONTRACT_ABI, getSigner())
+    }
+    return _contract
 }
 
-//sha-512 hash for file
+// ─── SHA-512 hashing ─────────────────────────────────────────────────────────
+
+/** Compute SHA-512 hash of a file buffer. Returns 128-char hex string. */
 export function computeSHA512(buffer: Buffer): string {
     return createHash('sha512').update(buffer).digest('hex')
 }
 
-// hash to polygon
+// ─── Blockchain anchoring ─────────────────────────────────────────────────────
+
+/** Anchor a document hash on Polygon. Returns the transaction hash. */
 export async function anchorHashOnChain(
     documentId: string,
     sha512Hash: string
 ): Promise<string> {
-    const contract = getContract()
-    const hashBytes = ethers.hexlify(Buffer.from(sha512Hash, 'hex'))
+    try {
+        const contract = getContract()
+        const hashBytes = ethers.hexlify(Buffer.from(sha512Hash, 'hex'))
 
-    const tx = await contract.storeHash(documentId, hashBytes)
-    await tx.wait(1) // wait for 1 block confirmation
+        const tx = await contract.storeHash(documentId, hashBytes)
+        await tx.wait(1) // wait for 1 block confirmation
 
-    return tx.hash
+        return tx.hash
+    } catch (error) {
+        console.error(`Failed to anchor hash for document ${documentId}:`, error)
+        throw new Error('Blockchain anchoring failed. The document was saved but not anchored on-chain.')
+    }
 }
 
-// Verify a hash against what's stored on chain
+/** Verify a document hash against what's stored on Polygon. */
 export async function verifyHashOnChain(
     documentId: string,
     sha512Hash: string
 ): Promise<boolean> {
-    const contract = getContract()
-    const hashBytes = ethers.hexlify(Buffer.from(sha512Hash, 'hex'))
+    try {
+        const contract = getContract()
+        const hashBytes = ethers.hexlify(Buffer.from(sha512Hash, 'hex'))
 
-    return contract.verifyHash(documentId, hashBytes)
+        return await contract.verifyHash(documentId, hashBytes)
+    } catch (error) {
+        console.error(`Failed to verify hash for document ${documentId}:`, error)
+        throw new Error('Blockchain verification failed.')
+    }
 }

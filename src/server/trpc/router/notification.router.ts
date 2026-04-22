@@ -76,7 +76,7 @@ export const notificationRouter = createTRPCRouter({
 
     /** Mark a single notification as read */
     markRead: protectedProcedure
-        .input(z.object({ notificationId: z.string().uuid() }))
+        .input(z.object({ notificationId: z.uuid() }))
         .mutation(async ({ ctx, input }) => {
             const { data, error } = await ctx.supabase
                 .from('notifications')
@@ -107,10 +107,10 @@ export const notificationRouter = createTRPCRouter({
         .mutation(async ({ ctx }) => {
             const { count, error } = await ctx.supabase
                 .from('notifications')
-                .update({ read: true })
+                .update({ read: true }, { count: 'exact' })
                 .eq('user_id', ctx.userId)
                 .eq('read', false)
-                .select('id', { count: 'exact', head: true })
+
 
             if (error) {
                 throw new TRPCError({

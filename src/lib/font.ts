@@ -1,24 +1,17 @@
-import { Inter, IBM_Plex_Serif } from "next/font/google";
+import { Cormorant_Garamond, DM_Sans } from "next/font/google"
 
-export const inter = Inter({
-    weight: ["400", "500", "600", "700"],
-    subsets: ["latin", "latin-ext", "vietnamese"]
-}); 
-/*
-card Titles: 600
-body text: 400
-label: 500
-Buttons: 600
-Navbar: 600
-*/
-
-
-export const ibmPlexSerif = IBM_Plex_Serif({
+/** Headings — authoritative, legal feel */
+export const cormorantGaramond = Cormorant_Garamond({
     weight: ["600", "700"],
-    subsets: ["latin", "latin-ext", "vietnamese"]
-}); 
-/*
-hero headline: 700
-Section titles: 600
-Legal Headings: 600
-*/
+    subsets: ["latin", "latin-ext"],
+    variable: "--font-heading",
+    display: "swap",
+})
+
+/** Body — clean, readable */
+export const dmSans = DM_Sans({
+    weight: ["400", "500", "600", "700"],
+    subsets: ["latin", "latin-ext"],
+    variable: "--font-body",
+    display: "swap",
+})
