@@ -62,7 +62,6 @@ export const connectionRouter = createTRPCRouter({
                 .insert({
                     connection_id: connection.id,
                     client_id: ctx.userId,
-                    stripe_checkout_session_id: input.stripeSessionId,
                     stripe_payment_intent_id: input.stripePaymentIntentId,
                     amount: input.amount,
                     status: 'CAPTURED',
@@ -91,7 +90,7 @@ export const connectionRouter = createTRPCRouter({
 
     /** Lawyer accepts a pending connection — creates a case */
     acceptConnection: lawyerProcedure
-        .input(z.object({ connectionId: z.string().uuid() }))
+        .input(z.object({ connectionId: z.uuid() }))
         .mutation(async ({ ctx, input }) => {
             // 1. Fetch connection and verify lawyer owns it
             const { data: connection, error: fetchError } = await ctx.supabase
@@ -262,7 +261,7 @@ export const connectionRouter = createTRPCRouter({
                         id,
                         status,
                         amount,
-                        stripe_payment_intent_id
+                        razorpay_payment_id
                     )
                 `, { count: 'exact' })
                 .eq('lawyer_id', ctx.userId)
