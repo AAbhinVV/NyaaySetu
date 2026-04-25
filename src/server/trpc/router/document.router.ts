@@ -19,7 +19,7 @@ async function verifyCaseAccess(
 
     if (error || !data) {
         throw new TRPCError({
-            code: 'FORBIDDEN',
+            code: 'NOT_FOUND',
             message: 'Case not found or you do not have access',
         })
     }
@@ -42,7 +42,7 @@ async function verifyDocumentAccess(
 
     if (error || !data) {
         throw new TRPCError({
-            code: 'FORBIDDEN',
+            code: 'NOT_FOUND',
             message: 'Document not found or you do not have access',
         })
     }

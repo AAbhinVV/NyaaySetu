@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, lawyerProcedure, protectedProcedure, clientProcedure, createCallerFactory } from "../init";
+import { createTRPCRouter, lawyerProcedure, protectedProcedure, clientProcedure } from "../init";
 import { TRPCError } from "@trpc/server";
 import { createCaseInternal } from "./case.router";
 
@@ -62,6 +62,7 @@ export const connectionRouter = createTRPCRouter({
                 .insert({
                     connection_id: connection.id,
                     client_id: ctx.userId,
+                    stripe_session_id: input.stripeSessionId,
                     stripe_payment_intent_id: input.stripePaymentIntentId,
                     amount: input.amount,
                     status: 'CAPTURED',
@@ -102,8 +103,8 @@ export const connectionRouter = createTRPCRouter({
 
             if (fetchError || !connection) {
                 throw new TRPCError({
-                    code: 'FORBIDDEN',
-                    message: 'Connection not found or you do not have access',
+                    code: 'NOT_FOUND',
+                    message: 'Connection not found',
                 })
             }
 
@@ -175,7 +176,7 @@ export const connectionRouter = createTRPCRouter({
             reason: z.string().max(500).optional(),
         }))
         .mutation(async ({ ctx, input }) => {
-            // 1. Fetch from the correct table ('connections', not 'connection')
+            // 1. Fetch connection
             const { data: connection, error: fetchError } = await ctx.supabase
                 .from('connections')
                 .select('id, client_id, lawyer_id, status')
@@ -185,8 +186,8 @@ export const connectionRouter = createTRPCRouter({
 
             if (fetchError || !connection) {
                 throw new TRPCError({
-                    code: 'FORBIDDEN',
-                    message: 'Connection not found or you do not have access',
+                    code: 'NOT_FOUND',
+                    message: 'Connection not found',
                 })
             }
 
@@ -216,7 +217,7 @@ export const connectionRouter = createTRPCRouter({
             }
 
             // 3. Notify the client
-            const { error: notifError } = await ctx.supabase
+            await ctx.supabase
                 .from('notifications')
                 .insert({
                     user_id: connection.client_id,
@@ -227,10 +228,6 @@ export const connectionRouter = createTRPCRouter({
                         : 'Your lawyer declined your request. You can connect with another lawyer.',
                     case_id: null,
                 })
-
-            if (notifError) {
-                console.error('Failed to send decline notification:', notifError)
-            }
 
             return { success: true }
         }),
@@ -261,7 +258,7 @@ export const connectionRouter = createTRPCRouter({
                         id,
                         status,
                         amount,
-                        razorpay_payment_id
+                        stripe_payment_intent_id
                     )
                 `, { count: 'exact' })
                 .eq('lawyer_id', ctx.userId)
@@ -334,18 +331,19 @@ export const connectionRouter = createTRPCRouter({
             }
         }),
 
-    /** Check if a client-lawyer pair has an active connection */
+    /** Check if the current user has a connection with a specific partner */
     isConnected: protectedProcedure
         .input(z.object({
-            clientId: z.string().uuid(),
-            lawyerId: z.string().uuid(),
+            clientId: z.uuid(),
+            lawyerId: z.uuid(),
         }))
         .query(async ({ ctx, input }) => {
+            // Scope to ctx.userId — check if current user is either the client or lawyer
             const { data, error } = await ctx.supabase
                 .from('connections')
                 .select('id, status')
-                .eq('client_id', input.clientId)
-                .eq('lawyer_id', input.lawyerId)
+                .or(`client_id.eq.${ctx.userId},lawyer_id.eq.${ctx.userId}`)
+                .or(`client_id.eq.${input.clientId},lawyer_id.eq.${input.lawyerId}`)
                 .in('status', ['ACTIVE', 'PENDING'])
                 .maybeSingle()
 

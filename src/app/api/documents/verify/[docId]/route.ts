@@ -21,13 +21,13 @@ export async function GET(
         const supabase = await createServerClient()
 
         // Fetch document from DB (include soft-deleted for verification purposes)
-        const { data: doc, error } = await supabase
+        const { data: doc, error: docError } = await supabase
             .from('documents')
             .select('id, file_name, sha512_hash, chain_tx_id, case_id, created_at, deleted_at')
             .eq('id', docId)
             .single()
 
-        if (error || !doc) {
+        if (docError || !doc) {
             return NextResponse.json({ error: 'Document not found' }, { status: 404 })
         }
 

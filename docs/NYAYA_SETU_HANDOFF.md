@@ -44,7 +44,7 @@ Every technology below was deliberately chosen. Do not suggest replacements.
 | Type safety | `supabase gen types typescript` | Replaces Prisma types |
 | API layer (internal) | tRPC | Type-safe client↔server calls |
 | API layer (external) | Next.js REST route handlers | Webhooks, file upload, public verify |
-| Payments | Razorpay | Indian payment gateway, ₹499 flat fee |
+| Payments | Stripe | Global payment gateway, ₹499 flat fee |
 | Blockchain | Polygon (ethers.js) | Document hash anchoring |
 | Email | Resend | Transactional emails |
 | SMS | Twilio | Hearing reminders (future sprint) |
@@ -55,7 +55,7 @@ Every technology below was deliberately chosen. Do not suggest replacements.
 
 **Key architectural decision — tRPC vs REST:**
 - tRPC: everything internal (frontend → backend, server → server)
-- REST: only webhooks (Clerk, Razorpay), file upload (multipart/form-data), public document verify endpoint
+- REST: only webhooks (Clerk, Stripe), file upload (multipart/form-data), public document verify endpoint
 
 **No Prisma — this was a deliberate decision:**
 Supabase already provides migrations, type generation, and a JS client. Adding Prisma creates two schema sources of truth and doesn't understand RLS, Storage, or Realtime. Use `supabase gen types typescript` and regenerate on every schema change.
@@ -103,7 +103,7 @@ nyaya-setu/
 │   │       ├── trpc/[trpc]/route.ts  ← tRPC HTTP adapter
 │   │       ├── webhooks/
 │   │       │   ├── clerk/route.ts    ← SKIPPED for now
-│   │       │   └── razorpay/route.ts ← SKIPPED for now
+│   │       │   └── stripe/route.ts  ← SKIPPED for now
 │   │       ├── payments/
 │   │       │   └── create/route.ts   ← SKIPPED for now
 │   │       └── documents/
@@ -131,7 +131,7 @@ nyaya-setu/
 │   │   │   ├── server.ts             ← WRITTEN
 │   │   │   └── client.ts             ← WRITTEN
 │   │   ├── blockchain.ts             ← WRITTEN
-│   │   ├── razorpay.ts               ← WRITTEN
+│   │   ├── stripe.ts                ← WRITTEN
 │   │   ├── notifications.ts          ← WRITTEN (email via Resend)
 │   │   ├── geo.ts                    ← WRITTEN
 │   │   ├── ratelimit.ts              ← WRITTEN
@@ -172,9 +172,9 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_xxx
 CLERK_SECRET_KEY=sk_test_xxx
 CLERK_WEBHOOK_SECRET=whsec_xxx
 
-# Razorpay
-RAZORPAY_KEY_ID=rzp_test_xxx
-RAZORPAY_KEY_SECRET=your_secret
+# Stripe
+STRIPE_SECRET_KEY=sk_test_xxx
+STRIPE_WEBHOOK_SECRET=whsec_xxx
 
 # Blockchain (Polygon Mumbai testnet for dev)
 POLYGON_RPC_URL=https://polygon-mumbai.g.alchemy.com/v2/your-key
@@ -220,7 +220,7 @@ e_token_status: ACTIVE | USED | EXPIRED
 users              — id, clerk_user_id, role, full_name, email, phone, city, state, suspended, suspension_reason, suspended_at
 lawyers            — id, user_id(FK→users), bar_council_id, full_name, bio, phone, city, state, specializations[], court_levels[], fee_per_consultation(paise), years_of_experience, languages_spoken[], verified, verification_status, rejection_reason, verified_at, win_rate, total_cases, avg_rating, review_count
 connections        — id, client_id(FK→users), lawyer_id(FK→users), status, decline_reason, accepted_at — UNIQUE(client_id, lawyer_id)
-payments           — id, connection_id(FK), client_id(FK), razorpay_order_id, razorpay_payment_id, amount(paise), currency, status
+payments           — id, connection_id(FK), client_id(FK), stripe_session_id, stripe_payment_intent_id, amount(paise), currency, status
 cases              — id, connection_id(FK), client_id(FK), lawyer_id(FK), title, category, status, e_token, court_name, jurisdiction_city, jurisdiction_state, next_hearing_at, verdict_outcome, verdict_summary, closed_at
 case_timeline      — id, case_id(FK), event_type, description, created_by(FK→users nullable)
 case_messages      — id, case_id(FK), sender_id(FK→users), content
@@ -313,7 +313,7 @@ recalculateRating   protectedProcedure mutation — internal, called after revie
 getDashboardSummary clientProcedure query    — Promise.all: counts + upcoming hearings
 getMyConnections    clientProcedure query    — connections with status filter
 getConnectionStatus clientProcedure query    — check if connected to specific lawyer
-initiatePayment     clientProcedure mutation — create Razorpay order, return orderId
+initiatePayment     clientProcedure mutation — create Stripe Checkout session, return sessionId
 getMyCases          clientProcedure query    — paginated cases with status filter
 getCaseById         clientProcedure query    — full case detail, ownership scoped
 getCaseTimeline     clientProcedure query    — ordered events, ownership checked
@@ -352,7 +352,7 @@ export async function createCaseInternal(ctx, input) — called from connection.
 
 ### `connection.router.ts` — WRITTEN, needs review
 ```
-create              protectedProcedure mutation — called by Razorpay webhook, checks duplicates
+create              protectedProcedure mutation — called by Stripe webhook, checks duplicates
 accept              lawyerProcedure    mutation — WRITTEN IN FULL, see below
 decline             lawyerProcedure    mutation — updates status, notifies client with reason
 getIncomingRequests lawyerProcedure    query   — joins users!client_id + payments, filters CAPTURED
@@ -422,7 +422,7 @@ getDashboardSummary protectedProcedure query — role-branch: client vs lawyer d
 src/lib/supabase/server.ts    — createServerClient (anon key, cookie handling)
                                 createServiceRoleClient (service role, bypasses RLS)
 src/lib/supabase/client.ts    — createClient (browser, for Realtime subscriptions)
-src/lib/razorpay.ts           — razorpay instance, createRazorpayOrder(), verifyRazorpaySignature()
+src/lib/stripe.ts             — Stripe instance, createStripeCheckoutSession(), verifyStripeWebhookSignature()
 src/lib/blockchain.ts         — computeSHA256(), anchorHashOnChain(), verifyHashOnChain()
 src/lib/geo.ts                — getCourtForCity(), generateEToken() with city→court map
 src/lib/ratelimit.ts          — generalLimiter, paymentLimiter, authLimiter, uploadLimiter, checkRateLimit()
@@ -431,7 +431,7 @@ src/lib/notifications.ts      — Resend email functions for each notification t
 
 ### Not yet written:
 ```
-src/lib/webhooks.ts           — Svix signature verify (Clerk), HMAC verify (Razorpay) — SKIPPED
+src/lib/webhooks.ts           — Svix signature verify (Clerk), Stripe webhook verify — SKIPPED
 src/lib/utils.ts              — general utilities
 ```
 
@@ -452,7 +452,7 @@ GET  /api/documents/verify/[docId]  — public, no auth, fetches hash from DB,
 ### Skipped (do later):
 ```
 POST /api/webhooks/clerk            — Svix signature verify, sync user to Supabase
-POST /api/webhooks/razorpay         — HMAC verify, call connection.create
+POST /api/webhooks/stripe          — Stripe webhook verify, call connection.create
 POST /api/payments/create           — actually this should be a tRPC mutation, not REST
 ```
 
@@ -550,7 +550,7 @@ Build in this exact order — each page depends on the previous being complete:
 - Full profile: stats row, specializations, checklist, reviews
 - Calls `trpc.lawyer.getById` + `trpc.lawyer.getReviews`
 - CTA: "Connect for ₹499" button — calls `trpc.client.initiatePayment`
-- Razorpay checkout modal opens with returned `orderId`
+- Stripe Checkout modal opens with returned `sessionId`
 
 **4. Client dashboard** (`/dashboard`)
 - Stats cards: total cases, active cases, connections, unread notifications
@@ -639,7 +639,7 @@ npm i @clerk/nextjs
 npm i @supabase/supabase-js @supabase/ssr
 
 # Payments
-npm i razorpay
+npm i stripe
 
 # Blockchain
 npm i ethers
@@ -689,7 +689,7 @@ Sprint 6:    ⏳ Frontend — onboarding + lawyer browse + profile
 Sprint 7:    ⏳ Frontend — client dashboard + cases + documents
 Sprint 8:    ⏳ Frontend — notifications + lawyer dashboard
 Sprint 9:    ⏳ Admin dashboard + webhook handlers
-Sprint 10:   ⏳ QA + Razorpay live keys + Polygon mainnet + launch prep
+Sprint 10:   ⏳ QA + Stripe live keys + Polygon mainnet + launch prep
 ```
 
 ---

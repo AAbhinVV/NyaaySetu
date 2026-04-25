@@ -154,8 +154,8 @@ create table payments (
   id                    uuid primary key default gen_random_uuid(),
   connection_id         uuid not null references connections(id) on delete cascade,
   client_id             uuid not null references users(id) on delete cascade,
-  razorpay_order_id     text not null unique,
-  razorpay_payment_id   text unique,
+  stripe_session_id      text not null unique,
+  stripe_payment_intent_id text unique,
   amount                integer not null, -- in paise, 49900 = ₹499
   currency              text not null default 'INR',
   status                payment_status not null default 'PENDING',
@@ -166,7 +166,7 @@ create table payments (
 create index idx_payments_connection_id on payments(connection_id);
 create index idx_payments_client_id on payments(client_id);
 create index idx_payments_status on payments(status);
-create index idx_payments_razorpay_order_id on payments(razorpay_order_id);
+create index idx_payments_stripe_session_id on payments(stripe_session_id);
 
 -- ─── Cases ────────────────────────────────────────────────────────────────────
 

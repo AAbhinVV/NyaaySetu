@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
 
         switch (eventType) {
             case "user.created": {
-                const { error } = await supabaseClient.from("userProfile").upsert({
+                const { error: userError } = await supabaseClient.from("userProfile").upsert({
                     id: user.id,
                     email_address: email,
                     first_name: user.first_name || null,
@@ -66,17 +66,17 @@ export async function POST(req: NextRequest) {
                     username: user.username || null,
                     profile_image_url: user.image_url || null
                 })
-                if (error) {
-                    console.error("Failed to insert user into database:", error);
+                if (userError) {
+                    console.error("Failed to insert user into database:", userError);
                     return NextResponse.json({ error: "Failed to insert user into database" }, { status: 500 });
                 }
 
-                const { error } = await supabaseClient.from("wallets").insert({
+                const { error: walletError } = await supabaseClient.from("wallets").insert({
                     user_id: user.id,
                     balance: 1000
                 })
-                if (error) {
-                    console.error("Failed to create wallet for user:", error);
+                if (walletError) {
+                    console.error("Failed to create wallet for user:", walletError);
                     return NextResponse.json({ error: "Failed to create wallet" }, { status: 500 });
                 }
 
@@ -85,15 +85,15 @@ export async function POST(req: NextRequest) {
                 break;
             }
             case "user.updated": {
-                const { error } = await supabaseClient.from("userProfile").update({
+                const { error: userError } = await supabaseClient.from("userProfile").update({
                     email_address: email,
                     first_name: user.first_name || null,
                     last_name: user.last_name || null,
                     username: user.username || null,
                     profile_image_url: user.image_url || null
                 }).eq("id", user.id);
-                if (error) {
-                    console.error("Failed to update user in database:", error);
+                if (userError) {
+                    console.error("Failed to update user in database:", userError);
                     return NextResponse.json({ error: "Failed to update user in database" }, { status: 500 });
                 }
                 console.log('User updated:', user.id);
@@ -101,9 +101,9 @@ export async function POST(req: NextRequest) {
             }
 
             case "user.deleted": {
-                const { error } = await supabaseClient.from("userProfile").delete()
-                if (error) {
-                    console.error("Failed to delete user in database: ", error);
+                const { error: userError } = await supabaseClient.from("userProfile").delete()
+                if (userError) {
+                    console.error("Failed to delete user in database: ", userError);
                     return NextResponse.json({ error: "Failed to delete user from database" }, { status: 500 })
                 }
             }
