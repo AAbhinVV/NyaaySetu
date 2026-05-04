@@ -5,7 +5,13 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   SOVEREIGN LEGAL — "The Digital Jurist" Design System
+   NyaaySetu Design Tokens derived from Stitch "Sovereign Legal" DS
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 @theme inline {
+  /* ── Radius ─────────────────────────────────────────────────────────────── */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -13,6 +19,8 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
+
+  /* ── Semantic color aliases (Tailwind mapping) ──────────────────────────── */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -44,83 +52,245 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* ── Design System extended tokens ──────────────────────────────────────── */
+  --color-gold: var(--gold);
+  --color-emerald: var(--emerald);
+  --color-ivory: var(--ivory);
+  --color-surface-low: var(--surface-low);
+  --color-surface-high: var(--surface-high);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   Light Mode — "Sovereign Legal" (Default)
+   ═══════════════════════════════════════════════════════════════════════════ */
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --radius: 0.5rem; /* 8px — ROUND_EIGHT per design system */
+
+  /* ── Core palette ────────────────────────────────────────────────────────
+     primary:   Deep Navy #1B2A4A — foundation of authority
+     secondary: Warm Gold #C9A84C — seal of excellence
+     tertiary:  Muted Emerald #2E7D5E — success / growth
+     surface:   Warm Ivory #FBF9F4 — sophisticated alt to pure white
+  ──────────────────────────────────────────────────────────────────────── */
+  --background: #FBF9F4;
+  --foreground: #1B1C19;
+
+  --card: #FFFFFF;
+  --card-foreground: #1B1C19;
+
+  --popover: #FFFFFF;
+  --popover-foreground: #1B1C19;
+
+  --primary: #1B2A4A;
+  --primary-foreground: #FFFFFF;
+
+  --secondary: #C9A84C;
+  --secondary-foreground: #241A00;
+
+  --muted: #F5F3EE;
+  --muted-foreground: #718096;
+
+  --accent: #F0EEE9;
+  --accent-foreground: #1B2A4A;
+
+  --destructive: #BA1A1A;
+
+  --border: rgba(197, 198, 207, 0.15);  /* outline-variant at 15% — "Ghost Border" */
+  --input: #E4E2DD;
+  --ring: #1B2A4A;
+
+  /* ── Design system extended tokens ──────────────────────────────────────── */
+  --gold: #C9A84C;
+  --emerald: #2E7D5E;
+  --ivory: #FBF9F4;
+  --surface-low: #F5F3EE;
+  --surface-high: #E4E2DD;
+
+  /* ── Chart colors (brand-aligned) ───────────────────────────────────────── */
+  --chart-1: #1B2A4A;
+  --chart-2: #C9A84C;
+  --chart-3: #2E7D5E;
+  --chart-4: #4F5E81;
+  --chart-5: #B7C6EE;
+
+  /* ── Sidebar (navy shell) ───────────────────────────────────────────────── */
+  --sidebar: #1B2A4A;
+  --sidebar-foreground: #E4E2DD;
+  --sidebar-primary: #C9A84C;
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent: rgba(255, 255, 255, 0.08);
+  --sidebar-accent-foreground: #FFFFFF;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-ring: #C9A84C;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   Dark Mode — "Sovereign Legal" (Inverted)
+   ═══════════════════════════════════════════════════════════════════════════ */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #0D1117;
+  --foreground: #E4E2DD;
+
+  --card: #161B22;
+  --card-foreground: #E4E2DD;
+
+  --popover: #161B22;
+  --popover-foreground: #E4E2DD;
+
+  --primary: #B7C6EE;
+  --primary-foreground: #0A1A3A;
+
+  --secondary: #E6C364;
+  --secondary-foreground: #241A00;
+
+  --muted: #1C2128;
+  --muted-foreground: #8B949E;
+
+  --accent: #1C2128;
+  --accent-foreground: #E4E2DD;
+
+  --destructive: #FF6B6B;
+
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #B7C6EE;
+
+  --gold: #E6C364;
+  --emerald: #88D6B2;
+  --ivory: #0D1117;
+  --surface-low: #161B22;
+  --surface-high: #1C2128;
+
+  --chart-1: #B7C6EE;
+  --chart-2: #E6C364;
+  --chart-3: #88D6B2;
+  --chart-4: #8392B7;
+  --chart-5: #4F5E81;
+
+  --sidebar: #0D1117;
+  --sidebar-foreground: #E4E2DD;
+  --sidebar-primary: #E6C364;
+  --sidebar-primary-foreground: #0D1117;
+  --sidebar-accent: rgba(255, 255, 255, 0.06);
+  --sidebar-accent-foreground: #E4E2DD;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
+  --sidebar-ring: #E6C364;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   Base Layer — Global Defaults
+   ═══════════════════════════════════════════════════════════════════════════ */
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
+    font-family: 'Inter', 'DM Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* ── Typography: The Editorial Contrast ──────────────────────────────────
+     Headlines: Cormorant Garamond / Newsreader (Voice of Authority)
+     Body/UI:   Inter (Voice of Reason)
+     Minimum 2:1 ratio between headline and body size
+  ──────────────────────────────────────────────────────────────────────── */
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Cormorant Garamond', 'Newsreader', 'Georgia', serif;
+    color: var(--primary);
+    letter-spacing: -0.02em;
+  }
+
+  h1 { font-size: 2.25rem; font-weight: 600; line-height: 1.15; }
+  h2 { font-size: 1.75rem; font-weight: 600; line-height: 1.2; }
+  h3 { font-size: 1.375rem; font-weight: 600; line-height: 1.25; }
+  h4 { font-size: 1.125rem; font-weight: 600; line-height: 1.3; }
+
+  p, span, label, input, textarea, select, button {
+    font-family: 'Inter', 'DM Sans', system-ui, sans-serif;
+  }
+
+  /* ── Never use pure black — always on-surface ───────────────────────────── */
+  ::selection {
+    background: rgba(27, 42, 74, 0.15);
+    color: #1B2A4A;
   }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   Utility Classes — Sovereign Legal Helpers
+   ═══════════════════════════════════════════════════════════════════════════ */
+@layer utilities {
+  /* ── The "Lawyer's Shadow" — barely perceptible ambient shadow ──────────── */
+  .shadow-lawyer {
+    box-shadow: 0 12px 40px rgba(27, 28, 25, 0.06);
+  }
+
+  /* ── Signature gradient for primary buttons ─────────────────────────────── */
+  .bg-primary-gradient {
+    background: linear-gradient(135deg, #1B2A4A, rgba(27, 42, 74, 0.85));
+  }
+
+  /* ── Glassmorphism for navigation bars ──────────────────────────────────── */
+  .glass-nav {
+    background: rgba(251, 249, 244, 0.80);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  /* ── Surface tiers (tonal layering without borders) ─────────────────────── */
+  .surface-base { background: var(--background); }
+  .surface-low { background: var(--surface-low); }
+  .surface-card { background: var(--card); }
+  .surface-high { background: var(--surface-high); }
+
+  /* ── Typography helpers ─────────────────────────────────────────────────── */
+  .font-serif-heading {
+    font-family: 'Cormorant Garamond', 'Newsreader', 'Georgia', serif;
+    letter-spacing: -0.02em;
+  }
+
+  .font-body {
+    font-family: 'Inter', 'DM Sans', system-ui, sans-serif;
+  }
+
+  /* ── Gold accent text ───────────────────────────────────────────────────── */
+  .text-gold { color: var(--gold); }
+  .bg-gold { background: var(--gold); }
+  .text-emerald { color: var(--emerald); }
+  .bg-emerald { background: var(--emerald); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Component Patterns — Design System Enforcement
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Scrollbar styling (subtle, on-brand) ─────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(27, 42, 74, 0.15);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(27, 42, 74, 0.25);
+}
+
+/* ── Focus ring (gold accent for accessibility) ───────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* ── Smooth transitions globally ──────────────────────────────────────────── */
+a, button {
+  transition: color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}

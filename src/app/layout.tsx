@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Analytics } from "@vercel/analytics/next";
-import { cormorantGaramond, dmSans } from "@/lib/font";
+import { TRPCProvider } from "@/lib/trpc/provider";
+import { cormorantGaramond, inter, dmSans } from "@/lib/font";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -23,9 +24,11 @@ export default function RootLayout({
         >
             <html lang="en">
                 <body
-                    className={`${cormorantGaramond.variable} ${dmSans.variable} font-body antialiased`}
+                    className={`${cormorantGaramond.variable} ${inter.variable} ${dmSans.variable} font-body antialiased`}
                 >
-                    {children}
+                    <TRPCProvider>
+                        {children}
+                    </TRPCProvider>
                     <Analytics />
                 </body>
             </html>
