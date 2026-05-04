@@ -1,6 +1,6 @@
-import { Cormorant_Garamond, DM_Sans } from "next/font/google"
+import { Cormorant_Garamond, DM_Sans, Inter } from "next/font/google"
 
-/** Headings — authoritative, legal feel */
+/** Headings — "Voice of Authority" (serif) */
 export const cormorantGaramond = Cormorant_Garamond({
     weight: ["600", "700"],
     subsets: ["latin", "latin-ext"],
@@ -8,7 +8,15 @@ export const cormorantGaramond = Cormorant_Garamond({
     display: "swap",
 })
 
-/** Body — clean, readable */
+/** Body primary — "Voice of Reason" (Inter per Sovereign Legal DS) */
+export const inter = Inter({
+    weight: ["400", "500", "600", "700"],
+    subsets: ["latin", "latin-ext"],
+    variable: "--font-inter",
+    display: "swap",
+})
+
+/** Body fallback — DM Sans */
 export const dmSans = DM_Sans({
     weight: ["400", "500", "600", "700"],
     subsets: ["latin", "latin-ext"],
