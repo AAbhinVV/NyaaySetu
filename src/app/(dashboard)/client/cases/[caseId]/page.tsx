@@ -19,12 +19,16 @@ export default function CaseDetailPage() {
     const [newMsg, setNewMsg] = useState("")
 
     const detail = trpc.client.getCaseById.useQuery({ caseId })
-    const messages = trpc.client.getCaseMessages.useQuery({ caseId })
+    const timeline = trpc.client.getCaseTimeline.useQuery({ caseId })
+    const messages = trpc.client.getCaseMessages.useQuery({ caseId, page: 1, limit: 30 })
     const docs = trpc.document.getCaseDocuments.useQuery({ caseId })
     const sendMsg = trpc.client.sendMessage.useMutation({ onSuccess: () => { setNewMsg(""); messages.refetch() } })
-    const utils = trpc.useUtils()
 
     const c = detail.data
+    const msgList = messages.data?.messages ?? []
+    const timelineEvents = timeline.data ?? []
+    const docList = docs.data ?? []
+
     if (detail.isLoading) return <div className="flex items-center justify-center min-h-[50vh]"><p className="font-body text-sm text-muted-foreground">Loading case details…</p></div>
     if (!c) return <div className="flex items-center justify-center min-h-[50vh]"><p className="font-body text-sm text-muted-foreground">Case not found.</p></div>
 
@@ -48,7 +52,7 @@ export default function CaseDetailPage() {
                         <h1 className="font-serif-heading text-2xl font-semibold text-primary tracking-tight">{c.title || "Untitled Case"}</h1>
                         <span className={`font-body text-[0.6875rem] font-semibold px-2.5 py-0.5 rounded-md ${statusPill(c.status)}`}>{statusLabel(c.status)}</span>
                     </div>
-                    <p className="font-body text-sm text-muted-foreground mt-1">{c.category || "General"} • E-Token: {c.e_token}</p>
+                    <p className="font-body text-sm text-muted-foreground mt-1">{c.category || "General"} • E-Token: {c.e_tokens?.token || c.e_token || "—"}</p>
                     {c.description && <p className="font-body text-sm text-foreground/80 mt-3 leading-relaxed">{c.description}</p>}
                 </div>
                 <div className="flex gap-6 shrink-0">
@@ -72,23 +76,24 @@ export default function CaseDetailPage() {
             {/* Tabs */}
             <div className="flex gap-2 mb-6">
                 {tabBtn("timeline", "Timeline")}
-                {tabBtn("messages", `Messages (${messages.data?.length ?? 0})`)}
-                {tabBtn("documents", `Documents (${docs.data?.length ?? 0})`)}
+                {tabBtn("messages", `Messages (${messages.data?.total ?? 0})`)}
+                {tabBtn("documents", `Documents (${docList.length})`)}
             </div>
 
             {/* Tab: Timeline */}
             {tab === "timeline" && (
                 <section className="bg-card rounded-xl shadow-lawyer p-6">
                     <h2 className="font-serif-heading text-lg font-semibold text-primary mb-5">Case Timeline</h2>
-                    {(c.timeline && c.timeline.length > 0) ? (
+                    {timelineEvents.length > 0 ? (
                         <div className="relative pl-6">
                             <div className="absolute left-[11px] top-2 bottom-2 w-px bg-muted"/>
-                            {c.timeline.map((ev: any, i: number) => (
+                            {timelineEvents.map((ev: any, i: number) => (
                                 <div key={i} className="relative flex items-start gap-4 py-3">
                                     <div className="absolute left-[-17px] top-4 w-[7px] h-[7px] rounded-full bg-primary ring-[3px] ring-card"/>
                                     <div>
-                                        <p className="font-body text-sm font-semibold text-foreground">{ev.event}</p>
-                                        <p className="font-body text-xs text-muted-foreground mt-0.5">{new Date(ev.date).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}</p>
+                                        <p className="font-body text-sm font-semibold text-foreground">{ev.event || ev.title}</p>
+                                        <p className="font-body text-xs text-muted-foreground mt-0.5">{new Date(ev.created_at || ev.date).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}</p>
+                                        {ev.description && <p className="font-body text-xs text-foreground/70 mt-1">{ev.description}</p>}
                                     </div>
                                 </div>
                             ))}
@@ -103,15 +108,15 @@ export default function CaseDetailPage() {
             {tab === "messages" && (
                 <section className="bg-card rounded-xl shadow-lawyer flex flex-col max-h-[600px]">
                     <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-3">
-                        {(messages.data ?? []).length === 0 ? (
+                        {msgList.length === 0 ? (
                             <p className="font-body text-sm text-muted-foreground text-center py-8">No messages yet. Start the conversation.</p>
                         ) : (
-                            (messages.data ?? []).map((m: any) => {
-                                const isOwn = m.sender_role === "CLIENT"
+                            msgList.map((m: any) => {
+                                const isOwn = m.sender_id === detail.data?.client_id
                                 return (
                                     <div key={m.id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
                                         <div className={`max-w-[70%] px-4 py-2.5 rounded-xl text-sm ${isOwn ? "bg-primary text-white rounded-br-sm" : "bg-muted text-foreground rounded-bl-sm"}`}>
-                                            <p>{m.body}</p>
+                                            <p>{m.content}</p>
                                             <p className={`text-[0.625rem] mt-1 ${isOwn ? "text-white/50" : "text-muted-foreground/60"}`}>{new Date(m.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}</p>
                                         </div>
                                     </div>
@@ -119,14 +124,16 @@ export default function CaseDetailPage() {
                             })
                         )}
                     </div>
-                    <div className="px-6 py-4 bg-muted flex gap-3">
-                        <input value={newMsg} onChange={e => setNewMsg(e.target.value)} placeholder="Type your message…"
-                            className="flex-1 bg-card rounded-lg px-4 py-2.5 font-body text-sm text-foreground outline-none placeholder:text-muted-foreground/50 focus:ring-1 focus:ring-gold"
-                            onKeyDown={e => { if (e.key === "Enter" && newMsg.trim()) sendMsg.mutate({ caseId, body: newMsg.trim() }) }}/>
-                        <button disabled={!newMsg.trim() || sendMsg.isPending}
-                            onClick={() => sendMsg.mutate({ caseId, body: newMsg.trim() })}
-                            className="px-5 py-2.5 rounded-lg bg-primary-gradient text-white text-sm font-medium disabled:opacity-50 cursor-pointer hover:shadow-lg transition-shadow">Send</button>
-                    </div>
+                    {c.status !== "CLOSED" && (
+                        <div className="px-6 py-4 bg-muted flex gap-3">
+                            <input value={newMsg} onChange={e => setNewMsg(e.target.value)} placeholder="Type your message…"
+                                className="flex-1 bg-card rounded-lg px-4 py-2.5 font-body text-sm text-foreground outline-none placeholder:text-muted-foreground/50 focus:ring-1 focus:ring-gold"
+                                onKeyDown={e => { if (e.key === "Enter" && newMsg.trim()) sendMsg.mutate({ caseId, body: newMsg.trim() }) }}/>
+                            <button disabled={!newMsg.trim() || sendMsg.isPending}
+                                onClick={() => sendMsg.mutate({ caseId, body: newMsg.trim() })}
+                                className="px-5 py-2.5 rounded-lg bg-primary-gradient text-white text-sm font-medium disabled:opacity-50 cursor-pointer hover:shadow-lg transition-shadow">Send</button>
+                        </div>
+                    )}
                 </section>
             )}
 
@@ -134,11 +141,11 @@ export default function CaseDetailPage() {
             {tab === "documents" && (
                 <section className="bg-card rounded-xl shadow-lawyer p-6">
                     <h2 className="font-serif-heading text-lg font-semibold text-primary mb-5">Case Documents</h2>
-                    {(docs.data ?? []).length === 0 ? (
+                    {docList.length === 0 ? (
                         <p className="font-body text-sm text-muted-foreground">No documents uploaded yet.</p>
                     ) : (
                         <div className="grid grid-cols-2 max-md:grid-cols-1 gap-4">
-                            {(docs.data ?? []).map((d: any) => (
+                            {docList.map((d: any) => (
                                 <div key={d.id} className="flex items-start gap-3 p-4 rounded-lg bg-muted">
                                     <div className="w-10 h-10 rounded-lg bg-primary/[0.06] flex items-center justify-center shrink-0">
                                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-primary"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14,2 14,8 20,8"/></svg>
