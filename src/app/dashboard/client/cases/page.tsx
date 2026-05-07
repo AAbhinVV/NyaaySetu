@@ -57,7 +57,7 @@ export default function ClientCasesPage() {
                 <div className="text-center py-12 px-8 bg-card rounded-xl">
                     <p className="font-body text-base font-semibold text-foreground">No cases found</p>
                     <p className="font-body text-sm text-muted-foreground mt-1">{statusFilter ? "Try a different filter." : "Connect with a lawyer to get started."}</p>
-                    {!statusFilter && <Link href="/client/lawyers" className="inline-block mt-4 px-6 py-2.5 rounded-lg bg-primary-gradient text-white font-body text-sm font-medium">Find a Lawyer</Link>}
+                    {!statusFilter && <Link href="/dashboard/client/lawyers" className="inline-block mt-4 px-6 py-2.5 rounded-lg bg-primary-gradient text-white font-body text-sm font-medium">Find a Lawyer</Link>}
                 </div>
             ) : (
                 <div className="flex flex-col bg-card rounded-xl overflow-hidden shadow-lawyer">

@@ -74,7 +74,7 @@ export default function LawyerDashboardPage() {
                         </span>
                     )}
                     {/* Notification bell */}
-                    <Link href="/lawyer/notifications" className="relative w-10 h-10 rounded-[10px] bg-card flex items-center justify-center shadow-lawyer" aria-label="Notifications">
+                    <Link href="/dashboard/lawyer/notifications" className="relative w-10 h-10 rounded-[10px] bg-card flex items-center justify-center shadow-lawyer" aria-label="Notifications">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-primary"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
                         {unreadCount > 0 && (
                             <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-destructive text-white text-[0.625rem] font-bold flex items-center justify-center">{unreadCount}</span>
@@ -102,7 +102,7 @@ export default function LawyerDashboardPage() {
                 <section className="col-span-3 max-lg:col-span-1">
                     <div className="flex justify-between items-baseline mb-4">
                         <h2 className="font-serif-heading text-[1.375rem] font-semibold text-primary">Active Cases</h2>
-                        <Link href="/lawyer/cases" className="font-body text-sm font-medium text-gold hover:underline">View All →</Link>
+                        <Link href="/dashboard/lawyer/cases" className="font-body text-sm font-medium text-gold hover:underline">View All →</Link>
                     </div>
 
                     {isLoading ? (
@@ -217,8 +217,8 @@ export default function LawyerDashboardPage() {
                         </div>
 
                         <div className="flex gap-3 mt-5 pt-5 border-t border-border">
-                            <Link href="/lawyer/profile" className="font-body text-sm font-medium px-4 py-2 rounded-lg bg-primary/5 text-primary hover:bg-primary/10 transition-colors">Edit Profile</Link>
-                            <Link href="/lawyer/cases" className="font-body text-sm font-medium px-4 py-2 rounded-lg bg-primary-gradient text-white hover:shadow-lg transition-shadow">Manage Cases</Link>
+                            <Link href="/dashboard/lawyer/profile" className="font-body text-sm font-medium px-4 py-2 rounded-lg bg-primary/5 text-primary hover:bg-primary/10 transition-colors">Edit Profile</Link>
+                            <Link href="/dashboard/lawyer/cases" className="font-body text-sm font-medium px-4 py-2 rounded-lg bg-primary-gradient text-white hover:shadow-lg transition-shadow">Manage Cases</Link>
                         </div>
                     </div>
                 </section>
@@ -228,7 +228,7 @@ export default function LawyerDashboardPage() {
             <section>
                 <h2 className="font-serif-heading text-[1.375rem] font-semibold text-primary mb-4">Quick Actions</h2>
                 <div className="grid grid-cols-3 max-md:grid-cols-1 gap-3">
-                    <Link href="/lawyer/cases" className="flex items-center gap-3 px-5 py-4 rounded-xl bg-card shadow-lawyer hover:shadow-lg hover:-translate-y-px transition-all no-underline">
+                    <Link href="/dashboard/lawyer/cases" className="flex items-center gap-3 px-5 py-4 rounded-xl bg-card shadow-lawyer hover:shadow-lg hover:-translate-y-px transition-all no-underline">
                         <div className="w-10 h-10 rounded-lg bg-primary/[0.06] flex items-center justify-center">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-primary"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
                         </div>
@@ -237,7 +237,7 @@ export default function LawyerDashboardPage() {
                             <p className="font-body text-xs text-muted-foreground">Manage your active legal matters</p>
                         </div>
                     </Link>
-                    <Link href="/lawyer/documents" className="flex items-center gap-3 px-5 py-4 rounded-xl bg-card shadow-lawyer hover:shadow-lg hover:-translate-y-px transition-all no-underline">
+                    <Link href="/dashboard/lawyer/documents" className="flex items-center gap-3 px-5 py-4 rounded-xl bg-card shadow-lawyer hover:shadow-lg hover:-translate-y-px transition-all no-underline">
                         <div className="w-10 h-10 rounded-lg bg-emerald/[0.06] flex items-center justify-center">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-emerald"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14,2 14,8 20,8"/></svg>
                         </div>
@@ -246,7 +246,7 @@ export default function LawyerDashboardPage() {
                             <p className="font-body text-xs text-muted-foreground">Blockchain-secured evidence files</p>
                         </div>
                     </Link>
-                    <Link href="/lawyer/profile" className="flex items-center gap-3 px-5 py-4 rounded-xl bg-card shadow-lawyer hover:shadow-lg hover:-translate-y-px transition-all no-underline">
+                    <Link href="/dashboard/lawyer/profile" className="flex items-center gap-3 px-5 py-4 rounded-xl bg-card shadow-lawyer hover:shadow-lg hover:-translate-y-px transition-all no-underline">
                         <div className="w-10 h-10 rounded-lg bg-gold/[0.06] flex items-center justify-center">
                             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-gold"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                         </div>

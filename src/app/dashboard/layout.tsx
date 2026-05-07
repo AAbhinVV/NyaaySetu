@@ -16,29 +16,29 @@ const icons = {
 }
 
 const CLIENT_NAV = [
-    { label: "Dashboard", href: "/client", icon: icons.dashboard },
-    { label: "My Cases", href: "/client/cases", icon: icons.cases },
-    { label: "Find Lawyers", href: "/client/lawyers", icon: icons.lawyers },
-    { label: "Documents", href: "/client/documents", icon: icons.documents },
-    { label: "Payments", href: "/client/payments", icon: icons.payments },
-    { label: "Notifications", href: "/client/notifications", icon: icons.notifications },
-    { label: "Settings", href: "/client/settings", icon: icons.settings },
+    { label: "Dashboard", href: "/dashboard/client", icon: icons.dashboard },
+    { label: "My Cases", href: "/dashboard/client/cases", icon: icons.cases },
+    { label: "Find Lawyers", href: "/dashboard/client/lawyers", icon: icons.lawyers },
+    { label: "Documents", href: "/dashboard/client/documents", icon: icons.documents },
+    { label: "Payments", href: "/dashboard/client/payments", icon: icons.payments },
+    { label: "Notifications", href: "/dashboard/client/notifications", icon: icons.notifications },
+    { label: "Settings", href: "/dashboard/client/settings", icon: icons.settings },
 ]
 
 const LAWYER_NAV = [
-    { label: "Dashboard", href: "/lawyer", icon: icons.dashboard },
-    { label: "Cases", href: "/lawyer/cases", icon: icons.cases },
-    { label: "Clients", href: "/lawyer/clients", icon: icons.lawyers },
-    { label: "Documents", href: "/lawyer/documents", icon: icons.documents },
-    { label: "Payments", href: "/lawyer/payments", icon: icons.payments },
-    { label: "Notifications", href: "/lawyer/notifications", icon: icons.notifications },
-    { label: "Settings", href: "/lawyer/settings", icon: icons.settings },
+    { label: "Dashboard", href: "/dashboard/lawyer", icon: icons.dashboard },
+    { label: "Cases", href: "/dashboard/lawyer/cases", icon: icons.cases },
+    { label: "Clients", href: "/dashboard/lawyer/clients", icon: icons.lawyers },
+    { label: "Documents", href: "/dashboard/lawyer/documents", icon: icons.documents },
+    { label: "Payments", href: "/dashboard/lawyer/payments", icon: icons.payments },
+    { label: "Notifications", href: "/dashboard/lawyer/notifications", icon: icons.notifications },
+    { label: "Settings", href: "/dashboard/lawyer/settings", icon: icons.settings },
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
     const { user } = useUser()
-    const isLawyer = pathname.startsWith("/lawyer")
+    const isLawyer = pathname.startsWith("/dashboard/lawyer")
     const navItems = isLawyer ? LAWYER_NAV : CLIENT_NAV
 
     // Live unread count for notification badge

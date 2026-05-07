@@ -47,8 +47,8 @@ export default function ClientDashboardPage() {
                     <h1 className="font-serif-heading text-[2rem] font-semibold text-primary tracking-tight">Welcome back, {firstName}</h1>
                     <p className="font-body text-sm text-muted-foreground mt-1">{today}</p>
                 </div>
-                <Link href="/client/notifications" className="relative w-10 h-10 rounded-[10px] bg-card flex items-center justify-center shadow-lawyer" aria-label="Notifications">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                <Link href="/dashboard/client/notifications" className="relative w-10 h-10 rounded-[10px] bg-card flex items-center justify-center shadow-lawyer" aria-label="Notifications">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-primary"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
                     {(stats?.unreadNotifications ?? 0) > 0 && (
                         <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-destructive text-white text-[0.625rem] font-bold flex items-center justify-center">{stats!.unreadNotifications}</span>
                     )}
@@ -66,14 +66,14 @@ export default function ClientDashboardPage() {
             <section className="mb-9">
                 <div className="flex justify-between items-baseline mb-4">
                     <h2 className="font-serif-heading text-[1.375rem] font-semibold text-primary">Active Legal Matters</h2>
-                    <Link href="/client/cases" className="font-body text-sm font-medium text-gold hover:underline">View All →</Link>
+                    <Link href="/dashboard/client/cases" className="font-body text-sm font-medium text-gold hover:underline">View All →</Link>
                 </div>
                 {isLoading ? (
                     <div className="font-body text-sm text-muted-foreground p-8 text-center bg-card rounded-xl">Loading cases…</div>
                 ) : activeCases.length === 0 ? (
                     <div className="font-body text-sm text-muted-foreground p-8 text-center bg-card rounded-xl">
                         <p>No active cases yet.</p>
-                        <Link href="/client/lawyers" className="inline-flex mt-4 px-5 py-2.5 rounded-lg bg-primary-gradient text-white text-sm font-medium">Find a Lawyer</Link>
+                        <Link href="/dashboard/client/lawyers" className="inline-flex mt-4 px-5 py-2.5 rounded-lg bg-primary-gradient text-white text-sm font-medium">Find a Lawyer</Link>
                     </div>
                 ) : (
                     <div className="grid grid-cols-2 max-md:grid-cols-1 gap-4">
@@ -113,9 +113,9 @@ export default function ClientDashboardPage() {
             <section className="mb-9">
                 <h2 className="font-serif-heading text-[1.375rem] font-semibold text-primary mb-4">Immediate Actions</h2>
                 <div className="flex max-md:flex-col gap-3">
-                    <Link href="/client/lawyers" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary-gradient text-white text-sm font-medium hover:shadow-lg transition-shadow">Find a Lawyer</Link>
-                    <Link href="/client/documents" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-card text-primary text-sm font-medium shadow-lawyer">Upload Document</Link>
-                    <Link href="/client/payments" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-primary text-sm font-medium hover:bg-primary/[0.04] transition-colors">Payment History</Link>
+                    <Link href="/dashboard/client/lawyers" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-primary-gradient text-white text-sm font-medium hover:shadow-lg transition-shadow">Find a Lawyer</Link>
+                    <Link href="/dashboard/client/documents" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-card text-primary text-sm font-medium shadow-lawyer">Upload Document</Link>
+                    <Link href="/dashboard/client/payments" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-primary text-sm font-medium hover:bg-primary/[0.04] transition-colors">Payment History</Link>
                 </div>
             </section>
 
@@ -129,7 +129,7 @@ export default function ClientDashboardPage() {
                         {notifications.map((n: any) => (
                             <div key={n.id} className="flex items-start gap-3.5 px-6 py-4 hover:bg-muted transition-colors">
                                 <div className="w-9 h-9 rounded-lg bg-primary/[0.06] flex items-center justify-center shrink-0 mt-0.5">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-primary"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-primary"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex justify-between items-baseline">

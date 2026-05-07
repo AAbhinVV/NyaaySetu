@@ -40,7 +40,7 @@ export default function CaseDetailPage() {
         <div className="max-w-[960px]">
             {/* Breadcrumb */}
             <div className="font-body text-sm text-muted-foreground mb-4">
-                <Link href="/client/cases" className="text-primary hover:underline">My Cases</Link>
+                <Link href="/dashboard/client/cases" className="text-primary hover:underline">My Cases</Link>
                 <span className="mx-2 text-muted-foreground/40">/</span>
                 <span>{c.title || "Untitled"}</span>
             </div>
