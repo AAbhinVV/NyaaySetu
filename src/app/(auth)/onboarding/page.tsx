@@ -91,6 +91,7 @@ export default function OnboardingPage() {
 
     // tRPC mutations
     const updateProfile = trpc.user.updateMyProfile.useMutation()
+
     const createLawyerProfile = trpc.lawyer.createProfile.useMutation()
 
     // ── Handlers ──────────────────────────────────────────────────────────────
@@ -143,13 +144,19 @@ export default function OnboardingPage() {
                 unsafeMetadata: { role: "CLIENT" },
             })
 
-            // 2. Update user profile in Supabase via tRPC
-            await updateProfile.mutateAsync({
-                fullName: clientForm.fullName.trim(),
-                phone: clientForm.phone,
-                city: clientForm.city.trim(),
-                state: clientForm.state,
-            })
+            try {
+                // 2. Update user profile in Supabase via tRPC
+                await updateProfile.mutateAsync({
+                    fullName: clientForm.fullName.trim(),
+                    phone: clientForm.phone,
+                    city: clientForm.city.trim(),
+                    state: clientForm.state,
+                })
+                console.log("updated");
+            } catch (error) {
+                console.log("mutateAsyncError");
+
+            }
 
             // 3. Redirect to client dashboard
             router.push("/dashboard/client")
@@ -447,11 +454,10 @@ export default function OnboardingPage() {
                                         <Badge
                                             key={cat.value}
                                             variant={selected ? "default" : "outline"}
-                                            className={`cursor-pointer select-none transition-all duration-200 ${
-                                                selected
-                                                    ? "bg-[#1B2A4A] text-white hover:bg-[#243760] border-[#1B2A4A]"
-                                                    : "border-[#E2E0D9] text-[#4A5568] hover:border-[#1B2A4A] hover:text-[#1B2A4A]"
-                                            }`}
+                                            className={`cursor-pointer select-none transition-all duration-200 ${selected
+                                                ? "bg-[#1B2A4A] text-white hover:bg-[#243760] border-[#1B2A4A]"
+                                                : "border-[#E2E0D9] text-[#4A5568] hover:border-[#1B2A4A] hover:text-[#1B2A4A]"
+                                                }`}
                                             onClick={() =>
                                                 toggleArrayItem(
                                                     lawyerForm.specializations,
@@ -476,11 +482,10 @@ export default function OnboardingPage() {
                                         <Badge
                                             key={cl.value}
                                             variant={selected ? "default" : "outline"}
-                                            className={`cursor-pointer select-none transition-all duration-200 ${
-                                                selected
-                                                    ? "bg-[#2D3F6B] text-white hover:bg-[#1B2A4A] border-[#2D3F6B]"
-                                                    : "border-[#E2E0D9] text-[#4A5568] hover:border-[#2D3F6B] hover:text-[#2D3F6B]"
-                                            }`}
+                                            className={`cursor-pointer select-none transition-all duration-200 ${selected
+                                                ? "bg-[#2D3F6B] text-white hover:bg-[#1B2A4A] border-[#2D3F6B]"
+                                                : "border-[#E2E0D9] text-[#4A5568] hover:border-[#2D3F6B] hover:text-[#2D3F6B]"
+                                                }`}
                                             onClick={() =>
                                                 toggleArrayItem(
                                                     lawyerForm.courtLevels,
@@ -543,11 +548,10 @@ export default function OnboardingPage() {
                                         <Badge
                                             key={lang}
                                             variant={selected ? "default" : "outline"}
-                                            className={`cursor-pointer select-none transition-all duration-200 text-xs ${
-                                                selected
-                                                    ? "bg-[#C9A84C] text-[#1B2A4A] hover:bg-[#B8953F] border-[#C9A84C]"
-                                                    : "border-[#E2E0D9] text-[#718096] hover:border-[#C9A84C] hover:text-[#C9A84C]"
-                                            }`}
+                                            className={`cursor-pointer select-none transition-all duration-200 text-xs ${selected
+                                                ? "bg-[#C9A84C] text-[#1B2A4A] hover:bg-[#B8953F] border-[#C9A84C]"
+                                                : "border-[#E2E0D9] text-[#718096] hover:border-[#C9A84C] hover:text-[#C9A84C]"
+                                                }`}
                                             onClick={() =>
                                                 toggleArrayItem(
                                                     lawyerForm.languagesSpoken,
