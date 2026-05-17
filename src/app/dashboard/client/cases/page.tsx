@@ -62,7 +62,7 @@ export default function ClientCasesPage() {
             ) : (
                 <div className="flex flex-col bg-card rounded-xl overflow-hidden shadow-lawyer">
                     {cases.map((c: any, i: number) => (
-                        <Link key={c.id} href={`/client/cases/${c.id}`}
+                        <Link key={c.id} href={`/dashboard/client/cases/${c.id}`}
                             className={`flex max-md:flex-wrap items-center gap-6 px-6 py-4 hover:bg-muted transition-colors no-underline text-inherit ${i > 0 ? "border-t border-border" : ""}`}>
                             <div className="flex-1 min-w-0">
                                 <h3 className="font-body text-[0.9375rem] font-semibold text-foreground truncate">{c.title || "Untitled Case"}</h3>

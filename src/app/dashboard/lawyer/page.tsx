@@ -115,7 +115,7 @@ export default function LawyerDashboardPage() {
                     ) : (
                         <div className="bg-card rounded-xl shadow-lawyer overflow-hidden">
                             {caseList.map((c: any, i: number) => (
-                                <Link key={c.id} href={`/lawyer/cases/${c.id}`}
+                                <Link key={c.id} href={`/dashboard/lawyer/cases/${c.id}`}
                                     className={`flex items-center gap-5 px-5 py-4 hover:bg-muted transition-colors no-underline text-inherit ${i > 0 ? "border-t border-border" : ""}`}>
                                     <div className="flex-1 min-w-0">
                                         <h3 className="font-body text-[0.9375rem] font-semibold text-foreground truncate">{c.title || "Untitled Case"}</h3>

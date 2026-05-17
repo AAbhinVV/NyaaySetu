@@ -101,7 +101,7 @@ export default function ClientDashboardPage() {
                                             </div>
                                         )}
                                     </div>
-                                    <Link href={`/client/cases/${c.id}`} className="font-body text-sm font-medium text-primary px-3 py-1.5 rounded-lg bg-primary/5 hover:bg-primary/10 transition-colors">View Details</Link>
+                                    <Link href={`/dashboard/client/cases/${c.id}`} className="font-body text-sm font-medium text-primary px-3 py-1.5 rounded-lg bg-primary/5 hover:bg-primary/10 transition-colors">View Details</Link>
                                 </div>
                             </div>
                         ))}
