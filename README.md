@@ -1,36 +1,174 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NyaaySetu — The Bridge of Justice
+
+India's first blockchain-secured legal platform connecting citizens with Bar Council-verified lawyers. File cases, manage evidence with tamper-proof blockchain anchoring, and communicate securely — all in one place.
+
+![Next.js](https://img.shields.io/badge/Next.js_16-black?logo=next.js) ![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?logo=supabase&logoColor=white) ![Stripe](https://img.shields.io/badge/Stripe-635BFF?logo=stripe&logoColor=white) ![Polygon](https://img.shields.io/badge/Polygon-7B3FE4?logo=polygon&logoColor=white)
+
+---
+
+## Features
+
+- **Verified Lawyers** — Every lawyer is verified against the Bar Council database before appearing on the platform.
+- **Blockchain Document Vault** — Case evidence is hashed (SHA-512) and anchored on the Polygon blockchain, ensuring immutability.
+- **Role-Based Dashboards** — Separate views for Clients, Lawyers, and Admins with tailored workflows.
+- **Secure Messaging** — End-to-end case messaging between client and counsel.
+- **Case Management** — Full lifecycle from filing → hearings → verdict with a visual timeline.
+- **Stripe Payments** — Flat ₹499 connection fee processed via Stripe Checkout.
+- **Real-Time Notifications** — In-app notification system with mark-as-read and badge counts.
+- **Admin Panel** — Platform statistics, lawyer verification queue, and user management.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Framework** | Next.js 16 (App Router, Turbopack) |
+| **Language** | TypeScript 5 |
+| **Database** | Supabase (PostgreSQL + Row Level Security) |
+| **Auth** | Clerk (SSO, MFA, session management) |
+| **API** | tRPC v11 (end-to-end type-safe RPC) |
+| **Payments** | Stripe Checkout |
+| **Blockchain** | Polygon (ethers.js v6, custom smart contract) |
+| **Styling** | Tailwind CSS 4 + custom design tokens |
+| **Email** | Resend |
+| **Rate Limiting** | Upstash Redis |
+
+---
+
+## Architecture
+
+```
+src/
+├── app/                    # Next.js App Router
+│   ├── (auth)/             # Sign-in, Sign-up, Onboarding
+│   ├── (public)/           # About, Pricing, Lawyer Directory
+│   ├── dashboard/          # Protected dashboards
+│   │   ├── client/         # Client views (cases, lawyers, documents, payments)
+│   │   ├── lawyer/         # Lawyer views (cases, clients, documents, earnings)
+│   │   └── admin/          # Admin panel (stats, user management)
+│   └── api/                # API routes (upload, webhooks, tRPC)
+├── server/trpc/            # tRPC routers & procedures
+│   └── router/
+│       ├── client.router.ts
+│       ├── lawyer.router.ts
+│       ├── case.router.ts
+│       ├── connection.router.ts
+│       ├── document.router.ts
+│       ├── notification.router.ts
+│       ├── review.router.ts
+│       ├── admin.router.ts
+│       └── user.router.ts
+└── lib/                    # Shared utilities
+    ├── blockchain.ts       # Polygon anchoring & verification
+    ├── stripe.ts           # Stripe Checkout & webhooks
+    ├── supabase/           # Supabase client (server + service role)
+    └── trpc/               # tRPC client & provider
+```
+
+---
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 20+
+- npm or pnpm
+- A [Supabase](https://supabase.com) project
+- A [Clerk](https://clerk.com) application
+- A [Stripe](https://stripe.com) account
+
+### 1. Clone & Install
+
+```bash
+git clone https://github.com/your-username/nyaaysetu.git
+cd nyaaysetu
+npm install
+```
+
+### 2. Configure Environment
+
+Copy `.env.example` (or `.env`) and fill in the required values:
+
+```env
+# Clerk
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+CLERK_WEBHOOK_SIGNING_SECRET=whsec_...
+
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+
+# Blockchain (Polygon)
+POLYGON_RPC_URL=https://polygon-mainnet.infura.io/v3/...
+BLOCKCHAIN_PRIVATE_KEY=...
+CONTRACT_ADDRESS=0x...
+
+# Stripe
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+
+# Resend (Email)
+RESEND_API_KEY=re_...
+
+# Upstash Redis (Rate Limiting)
+UPSTASH_REDIS_REST_URL=https://...
+UPSTASH_REDIS_REST_TOKEN=...
+```
+
+### 3. Run Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:8000](http://localhost:8000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 4. Build for Production
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+npm start
+```
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## User Flows
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Client
+1. Sign up → Complete onboarding (name, phone, city)
+2. Browse verified lawyers → Pay ₹499 connection fee via Stripe
+3. Lawyer accepts → Case is auto-created with e-token
+4. Upload documents (blockchain-anchored) → Message counsel → Track hearings
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Lawyer
+1. Sign up → Complete onboarding (Bar Council ID, specializations, court levels)
+2. Admin verifies profile → Appears in public directory
+3. Accept connection requests → Manage cases
+4. Schedule hearings → Record verdicts → Upload evidence
 
-## Deploy on Vercel
+### Admin
+1. View platform statistics (users, cases, revenue)
+2. Verify or reject lawyer registrations
+3. Suspend users, remove flagged reviews
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Design System
+
+NyaaySetu uses a **"Sovereign Legal"** design language:
+
+- **Background**: `#FBF9F4` (warm ivory)
+- **Primary**: `#1B2A4A` (navy)
+- **Gold Accent**: `#C9A84C`
+- **Emerald**: `#2E7D5E` (success/verified states)
+- **Headings**: Cormorant Garamond (serif)
+- **Body**: Inter (sans-serif)
+
+---
+
+## License
+
+This project is proprietary. All rights reserved.

@@ -139,24 +139,19 @@ export default function OnboardingPage() {
                 throw new Error("State is required")
             }
 
-            // 1. Set role in Clerk publicMetadata
+            // 1. Set role in Clerk metadata (client-side can only write unsafeMetadata;
+            //    the Clerk webhook should copy this to publicMetadata for production)
             await user?.update({
                 unsafeMetadata: { role: "CLIENT" },
             })
 
-            try {
-                // 2. Update user profile in Supabase via tRPC
-                await updateProfile.mutateAsync({
-                    fullName: clientForm.fullName.trim(),
-                    phone: clientForm.phone,
-                    city: clientForm.city.trim(),
-                    state: clientForm.state,
-                })
-                console.log("updated");
-            } catch (error) {
-                console.log("mutateAsyncError");
-
-            }
+            // 2. Update user profile in Supabase via tRPC
+            await updateProfile.mutateAsync({
+                fullName: clientForm.fullName.trim(),
+                phone: clientForm.phone,
+                city: clientForm.city.trim(),
+                state: clientForm.state,
+            })
 
             // 3. Redirect to client dashboard
             router.push("/dashboard/client")
@@ -195,7 +190,7 @@ export default function OnboardingPage() {
                 throw new Error("Select at least one court level")
             }
 
-            // 1. Set role in Clerk publicMetadata
+            // 1. Set role in Clerk metadata
             await user?.update({
                 unsafeMetadata: { role: "LAWYER" },
             })

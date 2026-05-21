@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { trpc } from "@/lib/trpc/client"
@@ -39,8 +39,31 @@ export default function LawyerCaseDetailPage() {
         onSuccess: () => { caseDetail.refetch(); timeline.refetch(); setShowVerdict(false) },
     })
 
+    const fileInputRef = useRef<HTMLInputElement>(null)
+    const [uploading, setUploading] = useState(false)
+    const [uploadError, setUploadError] = useState("")
+
     const c = caseDetail.data
     const isClosed = c?.status === "CLOSED"
+
+    const handleUpload = async (file: File) => {
+        setUploading(true)
+        setUploadError("")
+        try {
+            const formData = new FormData()
+            formData.append("file", file)
+            formData.append("caseId", caseId)
+            const res = await fetch("/api/upload/complete", { method: "POST", body: formData })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error || "Upload failed")
+            documents.refetch()
+        } catch (err: any) {
+            setUploadError(err.message || "Upload failed")
+        } finally {
+            setUploading(false)
+            if (fileInputRef.current) fileInputRef.current.value = ""
+        }
+    }
 
     if (caseDetail.isLoading) return <div className="flex items-center justify-center min-h-[50vh]"><p className="font-body text-sm text-muted-foreground">Loading case…</p></div>
     if (!c) return <div className="flex items-center justify-center min-h-[50vh]"><p className="font-body text-sm text-muted-foreground">Case not found.</p></div>
@@ -192,8 +215,33 @@ export default function LawyerCaseDetailPage() {
 
                 {tab === "documents" && (
                     <div className="p-6">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-serif-heading text-base font-semibold text-primary">Documents</h3>
+                            {!isClosed && (
+                                <div>
+                                    <input ref={fileInputRef} type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
+                                        onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f) }} />
+                                    <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+                                        className="font-body text-sm font-medium px-4 py-2 rounded-lg bg-primary-gradient text-white hover:shadow-lg transition-shadow border-none cursor-pointer disabled:opacity-50 flex items-center gap-2">
+                                        {uploading ? (
+                                            <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Uploading…</>
+                                        ) : (
+                                            <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17,8 12,3 7,8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Upload</>
+                                        )}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                        {uploadError && (
+                            <div className="mb-4 px-4 py-2.5 rounded-lg bg-destructive/10 text-destructive font-body text-sm">{uploadError}</div>
+                        )}
                         {documents.isLoading ? <p className="font-body text-sm text-muted-foreground">Loading…</p> :
-                        (documents.data ?? []).length === 0 ? <p className="font-body text-sm text-muted-foreground">No documents uploaded.</p> :
+                        (documents.data ?? []).length === 0 ? (
+                            <div className="text-center py-8">
+                                <p className="font-body text-sm text-muted-foreground">No documents uploaded.</p>
+                                {!isClosed && <p className="font-body text-xs text-muted-foreground/60 mt-1">Upload case evidence using the button above.</p>}
+                            </div>
+                        ) :
                         <div className="space-y-3">
                             {(documents.data ?? []).map((d: any) => (
                                 <div key={d.id} className="flex items-center gap-3 px-4 py-3 bg-muted rounded-lg">
@@ -203,6 +251,7 @@ export default function LawyerCaseDetailPage() {
                                         <p className="font-body text-[0.6875rem] text-muted-foreground/60">by {d.users?.full_name ?? "—"} • {new Date(d.created_at).toLocaleDateString("en-IN")}</p>
                                     </div>
                                     {d.chain_tx_id && <span className="font-body text-[0.625rem] font-semibold px-2 py-0.5 rounded bg-emerald/10 text-emerald shrink-0">On-chain</span>}
+                                    {d.file_url && <a href={d.file_url} target="_blank" rel="noopener noreferrer" className="font-body text-[0.625rem] text-primary hover:underline shrink-0">↓</a>}
                                 </div>
                             ))}
                         </div>}

@@ -1,9 +1,18 @@
-﻿export default function Page() {
+"use client"
+
+import { useEffect } from "react"
+import { useRouter } from "next/navigation"
+
+export default function NewCaseRedirect() {
+    const router = useRouter()
+
+    useEffect(() => {
+        router.replace("/dashboard/client/lawyers")
+    }, [router])
+
     return (
-        <div className="max-w-[960px] py-8 px-6">
-            <h1 className="font-serif-heading text-[2rem] font-semibold text-primary tracking-tight">New Case</h1>
-            <p className="font-body text-sm text-muted-foreground mt-1">Case filing form coming soon.</p>
+        <div className="flex items-center justify-center min-h-[50vh]">
+            <p className="font-body text-sm text-muted-foreground">Redirecting to lawyer directory…</p>
         </div>
     )
 }
-
