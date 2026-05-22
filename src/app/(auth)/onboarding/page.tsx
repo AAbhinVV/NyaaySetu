@@ -90,7 +90,7 @@ export default function OnboardingPage() {
     })
 
     // tRPC mutations
-    const updateProfile = trpc.user.updateMyProfile.useMutation()
+    const completeOnboarding = trpc.user.completeOnboarding.useMutation()
 
     const createLawyerProfile = trpc.lawyer.createProfile.useMutation()
 
@@ -145,15 +145,20 @@ export default function OnboardingPage() {
                 unsafeMetadata: { role: "CLIENT" },
             })
 
-            // 2. Update user profile in Supabase via tRPC
-            await updateProfile.mutateAsync({
+            // 2. Upsert user profile in Supabase via tRPC
+            await completeOnboarding.mutateAsync({
                 fullName: clientForm.fullName.trim(),
+                email: user?.primaryEmailAddress?.emailAddress ?? "",
                 phone: clientForm.phone,
                 city: clientForm.city.trim(),
                 state: clientForm.state,
+                role: "CLIENT",
             })
 
-            // 3. Redirect to client dashboard
+            // 3. Reload Clerk user so unsafeMetadata.role is available immediately
+            await user?.reload()
+
+            // 4. Redirect to client dashboard
             router.push("/dashboard/client")
         } catch (err) {
             setError(err instanceof Error ? err.message : "Something went wrong")
@@ -195,12 +200,14 @@ export default function OnboardingPage() {
                 unsafeMetadata: { role: "LAWYER" },
             })
 
-            // 2. Update base user profile
-            await updateProfile.mutateAsync({
+            // 2. Upsert base user profile
+            await completeOnboarding.mutateAsync({
                 fullName: lawyerForm.fullName.trim(),
+                email: user?.primaryEmailAddress?.emailAddress ?? "",
                 phone: lawyerForm.phone,
                 city: lawyerForm.city.trim(),
                 state: lawyerForm.state,
+                role: "LAWYER",
             })
 
             // 3. Create lawyer profile
@@ -220,7 +227,10 @@ export default function OnboardingPage() {
                     : undefined,
             })
 
-            // 4. Redirect to lawyer dashboard
+            // 4. Reload Clerk user so unsafeMetadata.role is available immediately
+            await user?.reload()
+
+            // 5. Redirect to lawyer dashboard
             router.push("/dashboard/lawyer")
         } catch (err) {
             setError(err instanceof Error ? err.message : "Something went wrong")

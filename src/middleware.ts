@@ -1,5 +1,4 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
-import { NextResponse } from 'next/server'
 
 const isPublicRoute = createRouteMatcher([
     '/sign-in(.*)',
@@ -8,12 +7,12 @@ const isPublicRoute = createRouteMatcher([
     '/about(.*)',
     '/lawyers(.*)',
     '/pricing(.*)',
+    '/onboarding(.*)',
     '/api/webhooks(.*)',
     '/api/documents/verify(.*)',
     '/api/health(.*)',
+    '/api/trpc(.*)',
 ])
-
-const isOnboardingRoute = createRouteMatcher(['/onboarding(.*)'])
 
 export default clerkMiddleware(async (auth, req) => {
     // Public routes are always accessible
@@ -22,20 +21,7 @@ export default clerkMiddleware(async (auth, req) => {
     }
 
     // All non-public routes require authentication
-    const { userId, sessionClaims } = await auth.protect()
-
-    // If user is authenticated but hasn't completed onboarding (no role set),
-    // redirect them to onboarding — unless they're already on the onboarding page
-    if (userId && !isOnboardingRoute(req)) {
-        const role = (sessionClaims?.publicMetadata as any)?.role ??
-                     (sessionClaims?.metadata as any)?.role ??
-                     (sessionClaims?.unsafeMetadata as any)?.role
-
-        if (!role) {
-            const onboardingUrl = new URL('/onboarding', req.url)
-            return NextResponse.redirect(onboardingUrl)
-        }
-    }
+    await auth.protect()
 })
 
 export const config = {

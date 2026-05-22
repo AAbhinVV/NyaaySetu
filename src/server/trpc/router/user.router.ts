@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { protectedProcedure, createTRPCRouter } from "../init";
+import { protectedProcedure, onboardingProcedure, createTRPCRouter } from "../init";
 import { TRPCError } from "@trpc/server";
 
 export const userRouter = createTRPCRouter({
@@ -105,6 +105,81 @@ export const userRouter = createTRPCRouter({
                     code: "INTERNAL_SERVER_ERROR",
                     message: "Failed to update user profile",
                 })
+            }
+
+            return { success: true }
+        }),
+
+    /** Onboarding: upsert user profile (works even if webhook hasn't created the row) */
+    completeOnboarding: onboardingProcedure
+        .input(z.object({
+            fullName: z.string().min(2),
+            email: z.email(),
+            phone: z.string().regex(/^[6-9]\d{9}$/),
+            city: z.string().min(1),
+            state: z.string().min(1),
+            role: z.enum(['CLIENT', 'LAWYER']),
+        }))
+        .mutation(async ({ ctx, input }) => {
+            // Use service role client to bypass RLS (no INSERT policy on users table)
+            const { createServiceRoleClient } = await import('@/lib/supabase/server')
+            const serviceSupabase = createServiceRoleClient()
+
+            const userData = {
+                clerk_user_id: ctx.clerkUserId,
+                full_name: input.fullName,
+                email: input.email,
+                phone: input.phone,
+                city: input.city,
+                state: input.state,
+                role: input.role,
+            }
+
+            // Try insert first
+            const { error: insertError } = await serviceSupabase
+                .from('users')
+                .insert(userData)
+
+            if (insertError) {
+                // Row already exists (from webhook) — do an explicit update
+                if (insertError.code === '23505') {
+                    const { error: updateError } = await serviceSupabase
+                        .from('users')
+                        .update({
+                            full_name: input.fullName,
+                            email: input.email,
+                            phone: input.phone,
+                            city: input.city,
+                            state: input.state,
+                            role: input.role,
+                        })
+                        .eq('clerk_user_id', ctx.clerkUserId)
+
+                    if (updateError) {
+                        throw new TRPCError({
+                            code: 'INTERNAL_SERVER_ERROR',
+                            message: `Failed to update profile: ${updateError.message}`,
+                        })
+                    }
+                } else {
+                    throw new TRPCError({
+                        code: 'INTERNAL_SERVER_ERROR',
+                        message: `Failed to save profile: ${insertError.message}`,
+                    })
+                }
+            }
+
+            // Set role in Clerk publicMetadata (server-side via Backend SDK).
+            // This is included in the JWT so the middleware can read it.
+            try {
+                const { clerkClient } = await import('@clerk/nextjs/server')
+                const clerk = await clerkClient()
+                await clerk.users.updateUserMetadata(ctx.clerkUserId, {
+                    publicMetadata: { role: input.role },
+                })
+            } catch (clerkErr) {
+                console.error('Failed to set Clerk publicMetadata:', clerkErr)
+                // Non-fatal — the user row is already created in Supabase
             }
 
             return { success: true }

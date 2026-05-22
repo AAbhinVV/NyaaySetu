@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { useUser, UserButton } from "@clerk/nextjs"
 import { trpc } from "@/lib/trpc/client"
 
@@ -41,11 +41,22 @@ const LAWYER_NAV = [
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
-    const { user } = useUser()
+    const router = useRouter()
+    const { user, isLoaded } = useUser()
     const isLawyer = pathname.startsWith("/dashboard/lawyer")
     const navItems = isLawyer ? LAWYER_NAV : CLIENT_NAV
 
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+
+    // Onboarding guard: redirect if user hasn't selected a role
+    useEffect(() => {
+        if (!isLoaded) return
+        const role = (user?.unsafeMetadata as any)?.role ??
+                     (user?.publicMetadata as any)?.role
+        if (!role) {
+            router.replace("/onboarding")
+        }
+    }, [isLoaded, user, router])
 
     // Live unread count for notification badge
     const unread = trpc.client.getDashboardSummary.useQuery(undefined, {
@@ -64,6 +75,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         const label = segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, " ")
         document.title = `${label} — NyaaySetu Dashboard`
     }, [pathname])
+
+    // Show nothing while checking onboarding status
+    if (!isLoaded) return null
 
     return (
         <div className="flex min-h-screen bg-background relative">

@@ -8,21 +8,39 @@ import { ZodError } from 'zod'
 // ─── Context ──────────────────────────────────────────────────────────────────
 
 export const createTRPCContext = cache(async () => {
-    const { userId, sessionClaims } = await auth()
+    const { userId: clerkUserId, sessionClaims } = await auth()
     const supabase = await createServerClient()
 
-    // Set user ID in Supabase session config so RLS policies work.
-    // Without this, all RLS-protected queries return zero rows.
-    if (userId) {
-        await supabase.rpc('set_config', {
-            setting: 'app.user_id',
-            value: userId,
-        })
+    let dbUserId: string | null = null
+
+    if (clerkUserId) {
+        // Use service role client for the initial lookup to bypass RLS.
+        // (RLS needs app.user_id set, but we need the UUID first — chicken-and-egg)
+        const { createServiceRoleClient } = await import('@/lib/supabase/server')
+        const serviceSupabase = createServiceRoleClient()
+
+        const { data: userRow } = await serviceSupabase
+            .from('users')
+            .select('id')
+            .eq('clerk_user_id', clerkUserId)
+            .maybeSingle()
+
+        dbUserId = userRow?.id ?? null
+
+        // Set user ID on the regular client so RLS policies work for all subsequent queries
+        if (dbUserId) {
+            await supabase.rpc('set_config', {
+                setting: 'app.user_id',
+                value: dbUserId,
+            })
+        }
     }
 
     return {
-        userId,
-        role: (sessionClaims?.metadata as { role?: string })?.role ?? null,
+        userId: dbUserId,
+        clerkUserId,
+        role: (sessionClaims?.metadata as { role?: string })?.role ??
+              (sessionClaims?.unsafeMetadata as { role?: string })?.role ?? null,
         supabase,
     }
 })
@@ -66,6 +84,19 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
         ctx: {
             ...ctx,
             userId: ctx.userId, // narrows from string | null → string
+        },
+    })
+})
+
+/** Requires Clerk auth but NOT a Supabase user row (for onboarding) */
+export const onboardingProcedure = t.procedure.use(({ ctx, next }) => {
+    if (!ctx.clerkUserId) {
+        throw new TRPCError({ code: 'UNAUTHORIZED' })
+    }
+    return next({
+        ctx: {
+            ...ctx,
+            clerkUserId: ctx.clerkUserId, // narrows from string | null | undefined → string
         },
     })
 })
