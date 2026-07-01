@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useUser } from "@clerk/nextjs"
+import { useUser, useSession } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
 import { trpc } from "@/lib/trpc/client"
 import { Button } from "@/components/ui/button"
@@ -55,6 +55,7 @@ type Step = "role" | "details"
 
 export default function OnboardingPage() {
     const { user, isLoaded } = useUser()
+    const { session } = useSession()
     const router = useRouter()
 
     // Flow state
@@ -155,8 +156,8 @@ export default function OnboardingPage() {
                 role: "CLIENT",
             })
 
-            // 3. Reload Clerk user so unsafeMetadata.role is available immediately
-            await user?.reload()
+            // 3. Reload Clerk session so the JWT token picks up the new role
+            await session?.reload()
 
             // 4. Redirect to client dashboard
             router.push("/dashboard/client")
@@ -227,8 +228,8 @@ export default function OnboardingPage() {
                     : undefined,
             })
 
-            // 4. Reload Clerk user so unsafeMetadata.role is available immediately
-            await user?.reload()
+            // 4. Reload Clerk session so the JWT token picks up the new role
+            await session?.reload()
 
             // 5. Redirect to lawyer dashboard
             router.push("/dashboard/lawyer")

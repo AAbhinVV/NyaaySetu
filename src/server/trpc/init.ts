@@ -12,6 +12,7 @@ export const createTRPCContext = cache(async () => {
     const supabase = await createServerClient()
 
     let dbUserId: string | null = null
+    let dbRole: string | null = null
 
     if (clerkUserId) {
         // Use service role client for the initial lookup to bypass RLS.
@@ -21,11 +22,12 @@ export const createTRPCContext = cache(async () => {
 
         const { data: userRow } = await serviceSupabase
             .from('users')
-            .select('id')
+            .select('id, role')
             .eq('clerk_user_id', clerkUserId)
             .maybeSingle()
 
         dbUserId = userRow?.id ?? null
+        dbRole = userRow?.role ?? null
 
         // Set user ID on the regular client so RLS policies work for all subsequent queries
         if (dbUserId) {
@@ -36,11 +38,16 @@ export const createTRPCContext = cache(async () => {
         }
     }
 
+    // Role priority: JWT session claims > DB role > null
+    const claimsRole =
+        (sessionClaims?.metadata as { role?: string })?.role ??
+        (sessionClaims?.unsafeMetadata as { role?: string })?.role ??
+        null
+
     return {
         userId: dbUserId,
         clerkUserId,
-        role: (sessionClaims?.metadata as { role?: string })?.role ??
-              (sessionClaims?.unsafeMetadata as { role?: string })?.role ?? null,
+        role: claimsRole ?? dbRole,
         supabase,
     }
 })

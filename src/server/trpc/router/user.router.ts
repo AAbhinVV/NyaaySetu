@@ -135,12 +135,18 @@ export const userRouter = createTRPCRouter({
                 role: input.role,
             }
 
+            console.log('[onboarding] Attempting to create user:', { clerkUserId: ctx.clerkUserId, role: input.role })
+
             // Try insert first
-            const { error: insertError } = await serviceSupabase
+            const { data: insertData, error: insertError } = await serviceSupabase
                 .from('users')
                 .insert(userData)
+                .select('id')
+                .single()
 
             if (insertError) {
+                console.error('[onboarding] Insert failed:', insertError.code, insertError.message)
+
                 // Row already exists (from webhook) — do an explicit update
                 if (insertError.code === '23505') {
                     const { error: updateError } = await serviceSupabase
@@ -156,17 +162,21 @@ export const userRouter = createTRPCRouter({
                         .eq('clerk_user_id', ctx.clerkUserId)
 
                     if (updateError) {
+                        console.error('[onboarding] Update failed:', updateError.message)
                         throw new TRPCError({
                             code: 'INTERNAL_SERVER_ERROR',
                             message: `Failed to update profile: ${updateError.message}`,
                         })
                     }
+                    console.log('[onboarding] Updated existing user for clerk:', ctx.clerkUserId)
                 } else {
                     throw new TRPCError({
                         code: 'INTERNAL_SERVER_ERROR',
                         message: `Failed to save profile: ${insertError.message}`,
                     })
                 }
+            } else {
+                console.log('[onboarding] User created successfully:', insertData?.id)
             }
 
             // Set role in Clerk publicMetadata (server-side via Backend SDK).
