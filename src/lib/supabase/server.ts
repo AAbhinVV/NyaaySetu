@@ -1,4 +1,5 @@
 import { createServerClient as createSupabaseServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
 /**
@@ -40,8 +41,6 @@ export async function createServerClient() {
  *   - Background jobs
  */
 export function createServiceRoleClient() {
-    const { createClient } = require('@supabase/supabase-js')
-
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
         throw new Error('SUPABASE_SERVICE_ROLE_KEY is not set')
     }

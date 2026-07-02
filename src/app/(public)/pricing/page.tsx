@@ -29,7 +29,7 @@ export default function PricingPage() {
 
                     <div className="space-y-3 mb-8">
                         {[
-                            "Connect with a Bar Council-verified lawyer",
+                            "Connect with a manually reviewed lawyer profile",
                             "End-to-end encrypted case communication",
                             "Blockchain-anchored document verification",
                             "Real-time case timeline & hearing updates",
@@ -58,7 +58,7 @@ export default function PricingPage() {
                     </div>
                     <h2 className="font-serif-heading text-2xl font-semibold text-primary mb-3">Free for Lawyers</h2>
                     <p className="font-body text-base text-muted-foreground max-w-[500px] mx-auto leading-relaxed mb-6">
-                        Creating a lawyer profile, getting verified, accepting clients, managing cases, and using the document vault is
+                        Creating a lawyer profile, submitting for manual review, accepting clients, managing cases, and using the document vault is
                         <span className="font-semibold text-emerald"> completely free</span>. NyaaySetu charges clients, not counsel.
                     </p>
                     <Link href="/sign-up" className="inline-block px-6 py-2.5 rounded-lg bg-emerald/10 text-[#226B4B] font-body text-sm font-semibold hover:bg-emerald/20 transition-colors">

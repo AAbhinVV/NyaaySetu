@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
-import { createTRPCRouter, clientProcedure, createCallerFactory } from '../init'
+import { createTRPCRouter, clientProcedure } from '../init'
+import { recalculateLawyerRating } from './lawyer.router'
 
 const CaseStatus = z.enum(['IN_PROGRESS', 'HEARING_SET', 'VERDICT', 'CLOSED'])
 
@@ -171,11 +172,24 @@ export const clientRouter = createTRPCRouter({
     getConnectionStatus: clientProcedure
         .input(z.object({ lawyerId: z.uuid() }))
         .query(async ({ ctx, input }) => {
+            const { data: lawyer, error: lawyerError } = await ctx.supabase
+                .from('lawyers')
+                .select('user_id')
+                .eq('id', input.lawyerId)
+                .single()
+
+            if (lawyerError || !lawyer) {
+                throw new TRPCError({
+                    code: 'NOT_FOUND',
+                    message: 'Lawyer profile not found',
+                })
+            }
+
             const { data, error } = await ctx.supabase
                 .from('connections')
                 .select('status')
                 .eq('client_id', ctx.userId)
-                .eq('lawyer_id', input.lawyerId)
+                .eq('lawyer_id', lawyer.user_id)
                 .maybeSingle()
 
             if (error) {
@@ -679,10 +693,7 @@ export const clientRouter = createTRPCRouter({
 
             // 4. Recalculate lawyer rating
             try {
-                const { lawyerRouter } = await import('./lawyer.router')
-                const createCaller = createCallerFactory(lawyerRouter)
-                const serverCaller = createCaller(ctx)
-                await serverCaller.recalculateRating({ lawyerId: caseData.lawyer_id })
+                await recalculateLawyerRating(ctx, caseData.lawyer_id)
             } catch (err) {
                 console.error('Failed to recalculate rating:', err)
             }

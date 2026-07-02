@@ -44,7 +44,7 @@ export default function PublicLawyerDirectoryPage() {
             {/* Header */}
             <section className="text-center mb-10">
                 <h1 className="font-serif-heading text-[2.5rem] max-md:text-[2rem] font-bold text-primary tracking-tight">Find a Lawyer</h1>
-                <p className="font-body text-base text-muted-foreground mt-2">Browse verified lawyers across India. Every lawyer is Bar Council-verified.</p>
+                <p className="font-body text-base text-muted-foreground mt-2">Browse manually reviewed lawyer profiles across India.</p>
             </section>
 
             {/* Search & Filters */}

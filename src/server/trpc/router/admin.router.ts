@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { adminProcedure, createTRPCRouter, createCallerFactory } from "../init";
 import { TRPCError } from '@trpc/server';
 import { clerkClient } from '@clerk/nextjs/server';
+import { recalculateLawyerRating } from './lawyer.router'
 
 const VerificationStatus = z.enum(['PENDING', 'VERIFIED', 'REJECTED'])
 
@@ -22,6 +23,10 @@ export const adminRouter = createTRPCRouter({
                 .select(`
                     id,
                     user_id,
+                    bar_council_id,
+                    state_bar_council,
+                    enrollment_year,
+                    verification_document_url,
                     full_name,
                     bio,
                     city,
@@ -258,10 +263,7 @@ export const adminRouter = createTRPCRouter({
 
             // Recalculate lawyer rating
             try {
-                const { lawyerRouter } = await import('./lawyer.router')
-                const createCaller = createCallerFactory(lawyerRouter)
-                const serverCaller = createCaller(ctx)
-                await serverCaller.recalculateRating({ lawyerId: review.lawyer_id })
+                await recalculateLawyerRating(ctx, review.lawyer_id)
             } catch (err) {
                 console.error('Failed to recalculate rating after review removal:', err)
             }

@@ -8,10 +8,18 @@ import { trpc } from "@/lib/trpc/client"
 export default function LawyerDetailPage() {
     const { lawyerId } = useParams<{ lawyerId: string }>()
     const [reviewPage, setReviewPage] = useState(1)
+    const [paymentConsent, setPaymentConsent] = useState(false)
 
     const lawyer = trpc.lawyer.getById.useQuery({ id: lawyerId })
     const reviews = trpc.lawyer.getReviews.useQuery({ lawyerId, page: reviewPage, limit: 5 })
     const connectionStatus = trpc.client.getConnectionStatus.useQuery({ lawyerId })
+    const checkout = trpc.connection.createConnectionCheckout.useMutation({
+        onSuccess: (data) => {
+            if (data.checkoutUrl) {
+                window.location.href = data.checkoutUrl
+            }
+        },
+    })
 
     const l = lawyer.data
     const reviewList = reviews.data?.reviews ?? []
@@ -62,8 +70,30 @@ export default function LawyerDetailPage() {
                 </div>
                 <div className="flex gap-3 mt-5 pt-5 border-t border-border">
                     {connStatus === "ACTIVE" ? <span className="font-body text-sm font-medium px-5 py-2.5 rounded-lg bg-emerald/10 text-emerald">✓ Connected</span>
-                    : connStatus === "PENDING" ? <span className="font-body text-sm font-medium px-5 py-2.5 rounded-lg bg-gold/10 text-[#96790C]">⏳ Pending</span>
-                    : <button className="font-body text-sm font-medium px-6 py-2.5 rounded-lg bg-primary-gradient text-white hover:shadow-lg transition-shadow border-none cursor-pointer">Connect — ₹{(l.fee_per_consultation / 100).toLocaleString("en-IN")}</button>}
+                    : connStatus === "PENDING" ? <span className="font-body text-sm font-medium px-5 py-2.5 rounded-lg bg-gold/10 text-[#96790C]">Payment or lawyer approval pending</span>
+                    : <div className="flex flex-col gap-3 max-w-[460px]">
+                        <label className="flex items-start gap-2 font-body text-xs text-muted-foreground leading-relaxed">
+                            <input
+                                type="checkbox"
+                                checked={paymentConsent}
+                                onChange={(e) => setPaymentConsent(e.target.checked)}
+                                className="mt-0.5"
+                            />
+                            <span>
+                                I understand the ₹499 fee is a connection fee governed by the <Link href="/refund-policy" className="text-primary underline">Refund Policy</Link>, and legal advice is provided only by the independent lawyer after acceptance.
+                            </span>
+                        </label>
+                        <button
+                            onClick={() => checkout.mutate({ lawyerId })}
+                            disabled={checkout.isPending || !paymentConsent}
+                            className="font-body text-sm font-medium px-6 py-2.5 rounded-lg bg-primary-gradient text-white hover:shadow-lg transition-shadow border-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                        >
+                            {checkout.isPending ? "Opening secure checkout..." : "Connect — ₹499"}
+                        </button>
+                    </div>}
+                    {checkout.error && (
+                        <p className="font-body text-sm text-destructive">{checkout.error.message}</p>
+                    )}
                 </div>
             </header>
 

@@ -8,7 +8,7 @@ import "./globals.css";
 export const metadata: Metadata = {
     title: "NyaaySetu — Connect with Verified Lawyers in India",
     description:
-        "Find verified lawyers, manage cases digitally, and secure documents with blockchain. Transparent fees, real reviews, real justice.",
+        "Find manually reviewed lawyer profiles, manage cases digitally, and secure documents with blockchain-backed verification.",
 };
 
 export default function RootLayout({

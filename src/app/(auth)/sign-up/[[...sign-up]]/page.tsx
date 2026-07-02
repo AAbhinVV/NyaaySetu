@@ -1,7 +1,6 @@
 "use client";
 
 import { SignUp } from "@clerk/nextjs";
-import { dark } from "@clerk/themes";
 
 export default function SignUpPage() {
   return (
@@ -18,7 +17,7 @@ export default function SignUpPage() {
           justify-content: center;
           font-family: 'EB Garamond', serif;
           position: relative;
-          overflow: hidden;
+          overflow-x: hidden;
           padding: 2rem 1rem;
         }
 
@@ -73,29 +72,50 @@ export default function SignUpPage() {
         .nyaya-card {
           background: #ffffff;
           border-radius: 4px;
-          padding: 2.5rem 2rem;
+          padding: 2.75rem 3rem 3rem;
           width: 100%;
-          max-width: 460px;
+          max-width: 640px;
           box-shadow:
             0 1px 3px rgba(26, 35, 79, 0.06),
             0 8px 32px rgba(26, 35, 79, 0.08);
           z-index: 1;
           animation: fadeUp 0.6s ease 0.1s both;
+          box-sizing: border-box;
         }
 
         .nyaya-card-title {
           font-family: 'Playfair Display', serif;
-          font-size: 1.6rem;
-          font-style: italic;
-          font-weight: 400;
+          font-size: 1.75rem;
+          font-style: normal;
+          font-weight: 600;
           color: #1a234f;
           text-align: center;
           margin: 0 0 1.75rem;
         }
 
         /* Clerk component overrides */
-        .nyaya-card .cl-rootBox {
-          width: 100%;
+        .nyaya-card .cl-rootBox,
+        .nyaya-card .cl-cardBox,
+        .nyaya-card .cl-card,
+        .nyaya-card .cl-main,
+        .nyaya-card .cl-form,
+        .nyaya-card .cl-formField,
+        .nyaya-card .cl-socialButtons,
+        .nyaya-card .cl-socialButtonsBlockButton,
+        .nyaya-card .cl-footer,
+        .nyaya-card .cl-footerAction {
+          width: 100% !important;
+          max-width: 100% !important;
+          box-sizing: border-box !important;
+        }
+
+        .nyaya-card .cl-rootBox,
+        .nyaya-card .cl-cardBox {
+          min-width: 0 !important;
+        }
+
+        .nyaya-card .cl-cardBox {
+          overflow: visible !important;
         }
 
         .nyaya-card .cl-card {
@@ -103,6 +123,33 @@ export default function SignUpPage() {
           padding: 0 !important;
           background: transparent !important;
           border: none !important;
+          overflow: visible !important;
+          margin: 0 !important;
+        }
+
+        .nyaya-card .cl-main {
+          padding: 1.5rem 2rem 1rem !important;
+        }
+
+        .nyaya-card .cl-formFieldRow,
+        .nyaya-card [class*="cl-formFieldRow"] {
+          width: 100% !important;
+          max-width: 100% !important;
+          display: grid !important;
+          grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+          gap: 1rem !important;
+        }
+
+        .nyaya-card .cl-formFieldRow__emailAddress,
+        .nyaya-card .cl-formFieldRow__password,
+        .nyaya-card .cl-formFieldRow__identifier,
+        .nyaya-card .cl-formFieldRow__code {
+          grid-template-columns: minmax(0, 1fr) !important;
+        }
+
+        .nyaya-card .cl-formFieldInput {
+          width: 100% !important;
+          min-width: 0 !important;
         }
 
         .nyaya-card .cl-headerTitle,
@@ -196,6 +243,53 @@ export default function SignUpPage() {
           text-underline-offset: 2px !important;
         }
 
+        .nyaya-card .cl-footer {
+          margin-top: 0 !important;
+          padding: 1.1rem 2rem 1.25rem !important;
+          border-top: 1px solid #e4dfd5 !important;
+          border-radius: 0 0 4px 4px !important;
+          background: #faf8f4 !important;
+          color: #6b6355 !important;
+          box-shadow: none !important;
+          overflow: hidden !important;
+        }
+
+        .nyaya-card .cl-footer::before,
+        .nyaya-card .cl-footer::after,
+        .nyaya-card .cl-footer *::before,
+        .nyaya-card .cl-footer *::after {
+          background: transparent !important;
+          box-shadow: none !important;
+        }
+
+        .nyaya-card .cl-footer *,
+        .nyaya-card .cl-footer svg {
+          color: #6b6355 !important;
+          fill: currentColor !important;
+        }
+
+        .nyaya-card .cl-footerAction {
+          justify-content: center !important;
+          gap: 0.35rem !important;
+          padding: 0 0 0.9rem !important;
+          background: transparent !important;
+        }
+
+        .nyaya-card .cl-footer [data-variant="buttonSmall"],
+        .nyaya-card .cl-footer [data-variant="body"] {
+          font-family: 'EB Garamond', serif !important;
+        }
+
+        .nyaya-card .cl-footer [data-color="inherit"] {
+          color: #8a8172 !important;
+        }
+
+        .nyaya-card .cl-footer [data-localization-key*="development"],
+        .nyaya-card .cl-footer p:last-child {
+          color: #1a234f !important;
+          opacity: 0.65 !important;
+        }
+
         .nyaya-card .cl-identityPreviewText,
         .nyaya-card .cl-identityPreviewEditButton {
           font-family: 'EB Garamond', serif !important;
@@ -273,6 +367,45 @@ export default function SignUpPage() {
           to {
             opacity: 1;
             transform: translateY(0);
+          }
+        }
+
+        @media (max-width: 640px) {
+          .nyaya-root {
+            justify-content: flex-start;
+            padding: 1.5rem 1rem;
+          }
+
+          .nyaya-root::after {
+            inset: 10px;
+          }
+
+          .nyaya-header {
+            margin-bottom: 1.5rem;
+          }
+
+          .nyaya-card {
+            padding: 2rem 1.25rem 2.25rem;
+            max-width: 100%;
+          }
+
+          .nyaya-card .cl-main {
+            padding: 1.25rem 1rem 0.85rem !important;
+          }
+
+          .nyaya-card .cl-footer {
+            padding: 1rem 1rem 1.1rem !important;
+          }
+
+          .nyaya-card .cl-formFieldRow,
+          .nyaya-card [class*="cl-formFieldRow"] {
+            grid-template-columns: 1fr !important;
+            gap: 0.85rem !important;
+          }
+
+          .nyaya-badges {
+            flex-direction: column;
+            gap: 0.6rem;
           }
         }
       `}</style>

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@clerk/nextjs/server"
-import { createServerClient } from "@/lib/supabase/server"
+import { createServiceRoleClient } from "@/lib/supabase/server"
 import { computeSHA512, anchorHashOnChain } from "@/lib/blockchain"
 
 /**
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
         const buffer = Buffer.from(arrayBuffer)
 
         // 5. Verify user has access to this case
-        const supabase = await createServerClient()
+        const supabase = createServiceRoleClient()
 
         const { data: dbUser } = await supabase
             .from("users")
@@ -104,31 +104,16 @@ export async function POST(req: NextRequest) {
             )
         }
 
-        // 8. Get public URL
-        const { data: urlData } = supabase.storage
-            .from("documents")
-            .getPublicUrl(storagePath)
-
-        const fileUrl = urlData?.publicUrl ?? ""
-
-        // 9. Anchor on blockchain (best-effort — don't fail the upload if this fails)
-        let chainTxId = ""
-        try {
-            chainTxId = await anchorHashOnChain(storagePath, sha512Hash)
-        } catch (err) {
-            console.error("Blockchain anchoring failed (non-fatal):", err)
-            // Continue — document is still saved, just not anchored
-        }
-
-        // 10. Register document in DB
+        // 8. Register document in DB. file_url intentionally stores a private
+        // storage path; downloads must go through the authenticated download API.
         const { data: document, error: docError } = await supabase
             .from("documents")
             .insert({
                 case_id: caseId,
                 file_name: file.name,
-                file_url: fileUrl,
+                file_url: storagePath,
                 sha512_hash: sha512Hash,
-                chain_tx_id: chainTxId || null,
+                chain_tx_id: "pending",
                 uploaded_by: dbUser.id,
             })
             .select()
@@ -140,6 +125,23 @@ export async function POST(req: NextRequest) {
                 { error: "Failed to register document" },
                 { status: 500 }
             )
+        }
+
+        // 9. Anchor on blockchain using the immutable document ID. This same ID
+        // is used by the public verification endpoint.
+        let chainTxId = "pending"
+        try {
+            chainTxId = await anchorHashOnChain(document.id, sha512Hash)
+            const { error: chainUpdateError } = await supabase
+                .from("documents")
+                .update({ chain_tx_id: chainTxId })
+                .eq("id", document.id)
+
+            if (chainUpdateError) {
+                console.error("Failed to update document chain transaction:", chainUpdateError)
+            }
+        } catch (err) {
+            console.error("Blockchain anchoring failed (document saved as pending):", err)
         }
 
         // 11. Notify the other party
@@ -161,9 +163,9 @@ export async function POST(req: NextRequest) {
             document: {
                 id: document.id,
                 file_name: document.file_name,
-                file_url: document.file_url,
+                file_url: `/api/documents/${document.id}/download`,
                 sha512_hash: document.sha512_hash,
-                chain_tx_id: document.chain_tx_id,
+                chain_tx_id: chainTxId,
             },
         })
     } catch (error) {

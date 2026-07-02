@@ -56,7 +56,7 @@ export default function LawyerNotificationsPage() {
                 <div className="text-center py-16 px-8 bg-card rounded-xl shadow-lawyer">
                     <div className="w-14 h-14 bg-primary/[0.06] rounded-xl flex items-center justify-center mx-auto mb-4 text-2xl">🔔</div>
                     <p className="font-body text-base font-semibold text-foreground">No notifications</p>
-                    <p className="font-body text-sm text-muted-foreground mt-1">You're all caught up.</p>
+                    <p className="font-body text-sm text-muted-foreground mt-1">You&apos;re all caught up.</p>
                 </div>
             ) : (
                 <div className="bg-card rounded-xl shadow-lawyer overflow-hidden">

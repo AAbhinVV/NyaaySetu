@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { createTRPCRouter, protectedProcedure, lawyerProcedure } from '../init'
 import type { TRPCContext } from '../init'
+import { updateLawyerWinRate } from './lawyer.router'
 
 // ─── Shared Internal Function ─────────────────────────────────────────────────
 
@@ -85,17 +86,6 @@ export async function createCaseInternal(
 // ─── Router ───────────────────────────────────────────────────────────────────
 
 export const caseRouter = createTRPCRouter({
-
-    /** Internal: create case — called from connection.accept */
-    createCase: lawyerProcedure
-        .input(z.object({
-            connectionId: z.string().uuid(),
-            clientId: z.string().uuid(),
-            lawyerId: z.string().uuid(),
-        }))
-        .mutation(async ({ ctx, input }) => {
-            return createCaseInternal(ctx, input)
-        }),
 
     /** Shared: get all cases — lawyer sees theirs, client sees theirs */
     getAllCases: protectedProcedure
@@ -384,11 +374,7 @@ export const caseRouter = createTRPCRouter({
 
             // Recalculate lawyer win rate
             try {
-                const { createCallerFactory } = await import('../init')
-                const { lawyerRouter } = await import('./lawyer.router')
-                const createCaller = createCallerFactory(lawyerRouter)
-                const serverCaller = createCaller(ctx)
-                await serverCaller.updateWinRate({ lawyerId: existing.lawyer_id })
+                await updateLawyerWinRate(ctx, existing.lawyer_id)
             } catch (err) {
                 console.error('Failed to update win rate after verdict:', err)
             }

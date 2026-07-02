@@ -136,6 +136,8 @@ export default function LawyerSettingsPage() {
                             { label: "City", value: p?.city ?? "Not set" },
                             { label: "State", value: p?.state ?? "Not set" },
                             { label: "Bar Council ID", value: p?.bar_council_id ?? "—" },
+                            { label: "State Bar Council", value: p?.state_bar_council ?? "—" },
+                            { label: "Enrolment Year", value: p?.enrollment_year ?? "—" },
                             { label: "Experience", value: `${p?.years_of_experience ?? 0} years` },
                             { label: "Consultation Fee", value: `₹${((p?.fee_per_consultation ?? 0) / 100).toLocaleString("en-IN")}` },
                         ].map(f => (

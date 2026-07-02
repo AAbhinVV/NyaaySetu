@@ -70,7 +70,7 @@ export default function LawyerDashboardPage() {
                     {prof?.verified && (
                         <span className="flex items-center gap-1.5 font-body text-xs font-semibold text-emerald bg-emerald/[0.06] px-3 py-1.5 rounded-lg">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2E7D5E" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>
-                            Bar Council Verified
+                            Profile Reviewed
                         </span>
                     )}
                     {/* Notification bell */}

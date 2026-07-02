@@ -34,6 +34,7 @@ export default function CaseDetailPage() {
     const fileInputRef = useRef<HTMLInputElement>(null)
     const [uploading, setUploading] = useState(false)
     const [uploadError, setUploadError] = useState("")
+    const [documentConsent, setDocumentConsent] = useState(false)
 
     const c = detail.data
     const msgList = messages.data?.messages ?? []
@@ -41,6 +42,11 @@ export default function CaseDetailPage() {
     const docList = docs.data ?? []
 
     const handleUpload = async (file: File) => {
+        if (!documentConsent) {
+            setUploadError("Please confirm the document upload consent before uploading")
+            if (fileInputRef.current) fileInputRef.current.value = ""
+            return
+        }
         setUploading(true)
         setUploadError("")
         try {
@@ -174,10 +180,14 @@ export default function CaseDetailPage() {
                     <div className="flex justify-between items-center mb-5">
                         <h2 className="font-serif-heading text-lg font-semibold text-primary">Case Documents</h2>
                         {c.status !== "CLOSED" && (
-                            <div>
+                            <div className="flex flex-col items-end gap-2 max-w-[420px]">
                                 <input ref={fileInputRef} type="file" className="hidden" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
                                     onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f) }} />
-                                <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+                                <label className="flex items-start gap-2 font-body text-xs text-muted-foreground leading-relaxed text-left">
+                                    <input type="checkbox" checked={documentConsent} onChange={(e) => setDocumentConsent(e.target.checked)} className="mt-0.5" />
+                                    <span>I have the right to upload this file and consent to secure storage, hashing, and blockchain anchoring. See <Link href="/document-retention-policy" className="text-primary underline">retention policy</Link>.</span>
+                                </label>
+                                <button onClick={() => fileInputRef.current?.click()} disabled={uploading || !documentConsent}
                                     className="font-body text-sm font-medium px-4 py-2 rounded-lg bg-primary-gradient text-white hover:shadow-lg transition-shadow border-none cursor-pointer disabled:opacity-50 flex items-center gap-2">
                                     {uploading ? (
                                         <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Uploading…</>
@@ -198,7 +208,7 @@ export default function CaseDetailPage() {
                             </div>
                             <p className="font-body text-sm text-muted-foreground">No documents uploaded yet.</p>
                             {c.status !== "CLOSED" && (
-                                <p className="font-body text-xs text-muted-foreground/60 mt-1">Click "Upload Document" to add case evidence.</p>
+                                <p className="font-body text-xs text-muted-foreground/60 mt-1">Click &quot;Upload Document&quot; to add case evidence.</p>
                             )}
                         </div>
                     ) : (
@@ -217,9 +227,7 @@ export default function CaseDetailPage() {
                                                 <span className="font-body text-[0.625rem] text-emerald font-medium">Blockchain Verified</span>
                                             </div>
                                         )}
-                                        {d.file_url && (
-                                            <a href={d.file_url} target="_blank" rel="noopener noreferrer" className="font-body text-[0.625rem] text-primary hover:underline mt-1 inline-block">Download ↓</a>
-                                        )}
+                                        <a href={`/api/documents/${d.id}/download`} target="_blank" rel="noopener noreferrer" className="font-body text-[0.625rem] text-primary hover:underline mt-1 inline-block">Download ↓</a>
                                     </div>
                                 </div>
                             ))}

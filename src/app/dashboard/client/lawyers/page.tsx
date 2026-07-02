@@ -61,7 +61,7 @@ export default function FindLawyersPage() {
             <div className="mb-6">
                 <h1 className="font-serif-heading text-[2rem] font-semibold text-primary tracking-tight">Find a Lawyer</h1>
                 <p className="font-body text-sm text-muted-foreground mt-1">
-                    {total} verified lawyers available • Filter by specialization, location, and more
+                    {total} reviewed lawyer profiles available • Filter by specialization, location, and more
                 </p>
             </div>
 
