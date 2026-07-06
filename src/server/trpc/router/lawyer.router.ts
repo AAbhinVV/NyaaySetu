@@ -3,10 +3,10 @@ import { TRPCError } from '@trpc/server'
 import {
     createTRPCRouter,
     baseProcedure,
-    protectedProcedure,
     lawyerProcedure,
     adminProcedure,
 } from '../init'
+import type { TRPCContext } from '../init'
 
 // ─── Input Schemas ────────────────────────────────────────────────────────────
 
@@ -33,6 +33,9 @@ const VerificationStatus = z.enum(['PENDING', 'VERIFIED', 'REJECTED'])
 
 const createProfileSchema = z.object({
     barCouncilId: z.string().min(3, 'Bar Council ID is required'),
+    stateBarCouncil: z.string().min(2, 'State Bar Council is required'),
+    enrollmentYear: z.number().int().min(1900).max(new Date().getFullYear()),
+    verificationDocumentUrl: z.string().min(1, 'Verification document is required'),
     fullName: z.string().min(2),
     bio: z.string().max(1000).optional(),
     city: z.string().min(2),
@@ -45,7 +48,12 @@ const createProfileSchema = z.object({
     phone: z.string().regex(/^[6-9]\d{9}$/, 'Enter a valid Indian mobile number'),
 })
 
-const updateProfileSchema = createProfileSchema.partial().omit({ barCouncilId: true })
+const updateProfileSchema = createProfileSchema.partial().omit({
+    barCouncilId: true,
+    stateBarCouncil: true,
+    enrollmentYear: true,
+    verificationDocumentUrl: true,
+})
 
 const searchSchema = z.object({
     query: z.string().optional(),
@@ -62,6 +70,86 @@ const searchSchema = z.object({
     page: z.number().min(1).default(1),
     limit: z.number().min(1).max(50).default(12),
 })
+
+export async function updateLawyerWinRate(ctx: TRPCContext, lawyerUserId: string) {
+    const { data: stats, error: statsError } = await ctx.supabase
+        .from('cases')
+        .select('verdict_outcome')
+        .eq('lawyer_id', lawyerUserId)
+        .eq('status', 'CLOSED')
+        .not('verdict_outcome', 'is', null)
+
+    if (statsError) {
+        throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: statsError.message,
+        })
+    }
+
+    const total = stats?.length ?? 0
+    const won = stats?.filter((c: { verdict_outcome: string | null }) => c.verdict_outcome === 'WON').length ?? 0
+    const winRate = total > 0 ? Math.round((won / total) * 100) : 0
+
+    const { data, error } = await ctx.supabase
+        .from('lawyers')
+        .update({
+            win_rate: winRate,
+            total_cases: total,
+        })
+        .eq('user_id', lawyerUserId)
+        .select('id, win_rate, total_cases')
+        .single()
+
+    if (error) {
+        throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: error.message,
+        })
+    }
+
+    return data
+}
+
+export async function recalculateLawyerRating(ctx: TRPCContext, lawyerUserId: string) {
+    const { data: reviews, error: reviewError } = await ctx.supabase
+        .from('reviews')
+        .select('rating')
+        .eq('lawyer_id', lawyerUserId)
+        .eq('flagged', false)
+
+    if (reviewError) {
+        throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: reviewError.message,
+        })
+    }
+
+    const count = reviews?.length ?? 0
+    const avg =
+        count > 0
+            ? parseFloat(
+                (
+                    reviews.reduce((sum: number, r: { rating: number }) => sum + r.rating, 0) / count
+                ).toFixed(2)
+            )
+            : 0
+
+    const { data, error } = await ctx.supabase
+        .from('lawyers')
+        .update({ avg_rating: avg, review_count: count })
+        .eq('user_id', lawyerUserId)
+        .select('id, avg_rating, review_count')
+        .single()
+
+    if (error) {
+        throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: error.message,
+        })
+    }
+
+    return data
+}
 
 // ─── Router ───────────────────────────────────────────────────────────────────
 
@@ -268,6 +356,9 @@ export const lawyerRouter = createTRPCRouter({
                 id,
                 user_id,
                 bar_council_id,
+                state_bar_council,
+                enrollment_year,
+                verification_document_url,
                 full_name,
                 bio,
                 phone,
@@ -337,6 +428,9 @@ export const lawyerRouter = createTRPCRouter({
                 .insert({
                     user_id: ctx.userId,
                     bar_council_id: input.barCouncilId,
+                    state_bar_council: input.stateBarCouncil,
+                    enrollment_year: input.enrollmentYear,
+                    verification_document_url: input.verificationDocumentUrl,
                     full_name: input.fullName,
                     bio: input.bio ?? null,
                     city: input.city,
@@ -452,92 +546,4 @@ export const lawyerRouter = createTRPCRouter({
             return data
         }),
 
-    // ── Internal: recalculate win rate after verdict ───────────────────────────
-    // Called server-side from case.recordVerdict, not exposed to clients directly
-    updateWinRate: protectedProcedure
-        .input(z.object({ lawyerId: z.string().uuid() }))
-        .mutation(async ({ ctx, input }) => {
-            // Count total closed cases and won cases for this lawyer
-            const { data: stats, error: statsError } = await ctx.supabase
-                .from('cases')
-                .select('verdict_outcome')
-                .eq('lawyer_id', input.lawyerId)
-                .eq('status', 'CLOSED')
-                .not('verdict_outcome', 'is', null)
-
-            if (statsError) {
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: statsError.message,
-                })
-            }
-
-            const total = stats?.length ?? 0
-            const won = stats?.filter((c: { verdict_outcome: string | null }) => c.verdict_outcome === 'WON').length ?? 0
-            const winRate = total > 0 ? Math.round((won / total) * 100) : 0
-
-            const { data, error } = await ctx.supabase
-                .from('lawyers')
-                .update({
-                    win_rate: winRate,
-                    total_cases: total,
-                })
-                .eq('id', input.lawyerId)
-                .select('id, win_rate, total_cases')
-                .single()
-
-            if (error) {
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: error.message,
-                })
-            }
-
-            return data
-        }),
-
-    // ── Internal: recalculate avg rating after a new review ───────────────────
-    // Called server-side from review.submit
-    recalculateRating: protectedProcedure
-        .input(z.object({ lawyerId: z.string().uuid() }))
-        .mutation(async ({ ctx, input }) => {
-            const { data: reviews, error: reviewError } = await ctx.supabase
-                .from('reviews')
-                .select('rating')
-                .eq('lawyer_id', input.lawyerId)
-                .eq('flagged', false)
-
-            if (reviewError) {
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: reviewError.message,
-                })
-            }
-
-            const count = reviews?.length ?? 0
-            const avg =
-                count > 0
-                    ? parseFloat(
-                        (
-                            reviews.reduce((sum: number, r: { rating: number }) => sum + r.rating, 0) / count
-                        ).toFixed(2)
-                    )
-                    : 0
-
-            const { data, error } = await ctx.supabase
-                .from('lawyers')
-                .update({ avg_rating: avg, review_count: count })
-                .eq('id', input.lawyerId)
-                .select('id, avg_rating, review_count')
-                .single()
-
-            if (error) {
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: error.message,
-                })
-            }
-
-            return data
-        }),
 })

@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+    turbopack: {
+        root: process.cwd(),
+    },
     // Allow Supabase Storage URLs for next/image
     images: {
         remotePatterns: [

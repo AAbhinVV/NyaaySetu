@@ -28,14 +28,14 @@ export default function LandingPage() {
             <main className="flex-1 flex flex-col items-center justify-center text-center px-6 py-20 max-w-[960px] mx-auto w-full">
                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gold/10 text-gold font-body text-xs font-semibold uppercase tracking-wider mb-8">
                     <span className="w-2 h-2 rounded-full bg-gold" />
-                    India&apos;s First Blockchain Legal Platform
+                    Blockchain-Secured Legal Platform
                 </div>
                 <h2 className="font-serif-heading text-[3.5rem] max-md:text-[2.5rem] font-bold text-primary tracking-tight leading-[1.1] mb-6">
                     Connect with Verified Lawyers.<br/>
                     Secure Your Legal Future.
                 </h2>
                 <p className="font-body text-lg text-muted-foreground max-w-[600px] mb-10 leading-relaxed">
-                    NyaaySetu bridges the gap between citizens and justice. Find Bar Council-verified advocates, manage cases end-to-end, and store evidence on an immutable blockchain.
+                    NyaaySetu bridges the gap between citizens and justice. Discover manually reviewed lawyer profiles, manage cases end-to-end, and store evidence with blockchain-backed verification.
                 </p>
                 <div className="flex gap-4">
                     <Link href="/sign-up" className="px-8 py-3.5 rounded-xl bg-primary-gradient text-white font-body text-base font-medium hover:shadow-lg transition-shadow">
@@ -50,8 +50,8 @@ export default function LandingPage() {
                 <div className="grid grid-cols-3 max-md:grid-cols-1 gap-6 mt-24 text-left w-full">
                     {[
                         {
-                            title: "Verified Counsel",
-                            desc: "Every lawyer on NyaaySetu is verified against the Bar Council database, ensuring you get authentic legal advice.",
+                            title: "Reviewed Counsel",
+                            desc: "Lawyer profiles are manually reviewed using submitted Bar Council details and supporting documents before appearing publicly.",
                             icon: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z",
                             icon2: "M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0",
                         },
@@ -80,6 +80,13 @@ export default function LandingPage() {
 
             {/* Footer */}
             <footer className="py-8 border-t border-border text-center">
+                <div className="flex flex-wrap items-center justify-center gap-4 mb-3">
+                    <Link href="/terms" className="font-body text-xs text-muted-foreground hover:text-primary">Terms</Link>
+                    <Link href="/privacy" className="font-body text-xs text-muted-foreground hover:text-primary">Privacy</Link>
+                    <Link href="/disclaimer" className="font-body text-xs text-muted-foreground hover:text-primary">Disclaimer</Link>
+                    <Link href="/refund-policy" className="font-body text-xs text-muted-foreground hover:text-primary">Refunds</Link>
+                    <Link href="/support" className="font-body text-xs text-muted-foreground hover:text-primary">Support</Link>
+                </div>
                 <p className="font-body text-sm text-muted-foreground">© {new Date().getFullYear()} NyaaySetu. All rights reserved.</p>
             </footer>
         </div>

@@ -34,6 +34,9 @@ export const userRouter = createTRPCRouter({
                     .select(`
                         id,
                         bar_council_id,
+                        state_bar_council,
+                        enrollment_year,
+                        verification_document_url,
                         verified,
                         verification_status,
                         specializations,

@@ -143,7 +143,7 @@ export default function LawyerProfilePage() {
                 ) : (
                     <div className="space-y-5">
                         <div className="grid grid-cols-2 max-md:grid-cols-1 gap-4">
-                            {[{ l: "Name", v: p.full_name }, { l: "Phone", v: p.phone }, { l: "City", v: p.city }, { l: "State", v: p.state }, { l: "Bar Council ID", v: p.bar_council_id }, { l: "Experience", v: `${p.years_of_experience} years` }].map(f => (
+                            {[{ l: "Name", v: p.full_name }, { l: "Phone", v: p.phone }, { l: "City", v: p.city }, { l: "State", v: p.state }, { l: "Bar Council ID", v: p.bar_council_id }, { l: "State Bar Council", v: p.state_bar_council ?? "—" }, { l: "Enrolment Year", v: p.enrollment_year ?? "—" }, { l: "Experience", v: `${p.years_of_experience} years` }].map(f => (
                                 <div key={f.l}><p className="font-body text-[0.6875rem] text-muted-foreground/60 uppercase tracking-wider">{f.l}</p><p className="font-body text-sm font-medium text-foreground mt-px">{f.v ?? "—"}</p></div>
                             ))}
                         </div>

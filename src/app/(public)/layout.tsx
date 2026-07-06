@@ -2,9 +2,9 @@ import Link from "next/link"
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
-    title: "NyaaySetu — India's First Blockchain Legal Platform",
+    title: "NyaaySetu — Blockchain-Secured Legal Platform",
     description:
-        "Find verified lawyers, manage cases digitally, and secure documents with blockchain. Transparent fees, real reviews, real justice.",
+        "Find manually reviewed lawyer profiles, manage cases digitally, and secure documents with blockchain-backed verification.",
 }
 
 export default function PublicLayout({
@@ -72,7 +72,7 @@ export default function PublicLayout({
                                 <span className="font-serif-heading text-base font-bold text-primary">NyaaySetu</span>
                             </div>
                             <p className="font-body text-xs text-muted-foreground/70 leading-relaxed max-w-[240px]">
-                                India&apos;s first blockchain-secured legal platform bridging citizens to verified counsel.
+                                Blockchain-secured legal workflows with manually reviewed lawyer profiles.
                             </p>
                         </div>
 
@@ -90,9 +90,13 @@ export default function PublicLayout({
                         <div>
                             <h4 className="font-body text-[0.6875rem] font-semibold text-muted-foreground/50 uppercase tracking-wider mb-3">Legal</h4>
                             <div className="flex flex-col gap-2">
-                                <span className="font-body text-sm text-muted-foreground/50">Terms of Service</span>
-                                <span className="font-body text-sm text-muted-foreground/50">Privacy Policy</span>
-                                <span className="font-body text-sm text-muted-foreground/50">Refund Policy</span>
+                                <Link href="/terms" className="font-body text-sm text-muted-foreground hover:text-primary transition-colors">Terms of Service</Link>
+                                <Link href="/privacy" className="font-body text-sm text-muted-foreground hover:text-primary transition-colors">Privacy Policy</Link>
+                                <Link href="/disclaimer" className="font-body text-sm text-muted-foreground hover:text-primary transition-colors">Legal Disclaimer</Link>
+                                <Link href="/refund-policy" className="font-body text-sm text-muted-foreground hover:text-primary transition-colors">Refund Policy</Link>
+                                <Link href="/lawyer-verification-policy" className="font-body text-sm text-muted-foreground hover:text-primary transition-colors">Lawyer Verification</Link>
+                                <Link href="/document-retention-policy" className="font-body text-sm text-muted-foreground hover:text-primary transition-colors">Document Retention</Link>
+                                <Link href="/support" className="font-body text-sm text-muted-foreground hover:text-primary transition-colors">Support</Link>
                             </div>
                         </div>
                     </div>

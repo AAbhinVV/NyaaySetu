@@ -9,7 +9,7 @@ export default function AboutPage() {
                     Bridging Citizens to Justice
                 </h1>
                 <p className="font-body text-lg text-muted-foreground mt-4 max-w-[600px] mx-auto leading-relaxed">
-                    NyaaySetu — <span className="text-gold font-medium">The Bridge of Justice</span> — is India&apos;s first blockchain-secured legal platform connecting citizens with verified lawyers.
+                    NyaaySetu — <span className="text-gold font-medium">The Bridge of Justice</span> — is a blockchain-secured legal platform connecting citizens with manually reviewed lawyer profiles.
                 </p>
             </section>
 
@@ -19,8 +19,8 @@ export default function AboutPage() {
                     <h2 className="font-serif-heading text-2xl font-semibold text-primary mb-4">Our Mission</h2>
                     <p className="font-body text-base text-foreground/80 leading-relaxed">
                         India&apos;s legal system serves 1.4 billion people, yet access to quality legal counsel remains a privilege for the few.
-                        NyaaySetu exists to change that — providing a transparent, blockchain-backed platform where every citizen can find verified
-                        lawyers, manage cases securely, and trust that their documents are tamper-proof.
+                        NyaaySetu exists to change that — providing a transparent, blockchain-backed platform where every citizen can discover reviewed
+                        lawyer profiles, manage cases securely, and verify document integrity.
                     </p>
                 </div>
             </section>
@@ -32,7 +32,7 @@ export default function AboutPage() {
                     {[
                         {
                             title: "Transparency",
-                            desc: "Every lawyer on NyaaySetu is Bar Council verified. Ratings, win rates, and fees are publicly visible — no hidden surprises.",
+                            desc: "Lawyer profiles are manually reviewed from submitted Bar Council details and supporting proof. Ratings, win rates, and fees are publicly visible.",
                             icon: "M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z",
                             icon2: "M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0-6 0",
                         },

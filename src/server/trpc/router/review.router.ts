@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { baseProcedure, clientProcedure, adminProcedure, createTRPCRouter, createCallerFactory } from "../init";
+import { baseProcedure, clientProcedure, adminProcedure, createTRPCRouter } from "../init";
 import { TRPCError } from "@trpc/server";
+import { recalculateLawyerRating } from './lawyer.router'
 
 const caseResult = z.enum(['WON', 'LOST', 'SETTLED'])
 
@@ -119,10 +120,7 @@ export const reviewRouter = createTRPCRouter({
 
             // 5. Recalculate lawyer rating
             try {
-                const { lawyerRouter } = await import('./lawyer.router')
-                const createCaller = createCallerFactory(lawyerRouter)
-                const serverCaller = createCaller(ctx)
-                await serverCaller.recalculateRating({ lawyerId: caseData.lawyer_id })
+                await recalculateLawyerRating(ctx, caseData.lawyer_id)
             } catch (err) {
                 console.error('Failed to recalculate lawyer rating after review:', err)
             }
@@ -199,10 +197,7 @@ export const reviewRouter = createTRPCRouter({
 
             // 3. Recalculate lawyer rating (flagged reviews are excluded)
             try {
-                const { lawyerRouter } = await import('./lawyer.router')
-                const createCaller = createCallerFactory(lawyerRouter)
-                const serverCaller = createCaller(ctx)
-                await serverCaller.recalculateRating({ lawyerId: reviewData.lawyer_id })
+                await recalculateLawyerRating(ctx, reviewData.lawyer_id)
             } catch (err) {
                 console.error('Failed to recalculate lawyer rating after flagging:', err)
             }

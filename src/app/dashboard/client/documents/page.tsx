@@ -82,10 +82,8 @@ export default function DocumentVaultPage() {
                                         className="font-body text-xs font-medium text-primary px-3 py-1.5 rounded-md bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer border-none">
                                         {expandedDoc === d.id ? "Hide Log" : "Access Log"}
                                     </button>
-                                    {d.file_url && (
-                                        <a href={d.file_url} target="_blank" rel="noopener noreferrer"
-                                            className="font-body text-xs font-medium text-gold px-3 py-1.5 rounded-md bg-gold/[0.06] hover:bg-gold/10 transition-colors">Download</a>
-                                    )}
+                                    <a href={`/api/documents/${d.id}/download`} target="_blank" rel="noopener noreferrer"
+                                        className="font-body text-xs font-medium text-gold px-3 py-1.5 rounded-md bg-gold/[0.06] hover:bg-gold/10 transition-colors">Download</a>
                                 </div>
                             </div>
 

@@ -1,6 +1,6 @@
 # NyaaySetu — The Bridge of Justice
 
-India's first blockchain-secured legal platform connecting citizens with Bar Council-verified lawyers. File cases, manage evidence with tamper-proof blockchain anchoring, and communicate securely — all in one place.
+Blockchain-secured legal platform connecting citizens with manually reviewed lawyer profiles. File cases, manage evidence with tamper-proof blockchain anchoring, and communicate securely — all in one place.
 
 ![Next.js](https://img.shields.io/badge/Next.js_16-black?logo=next.js) ![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?logo=supabase&logoColor=white) ![Stripe](https://img.shields.io/badge/Stripe-635BFF?logo=stripe&logoColor=white) ![Polygon](https://img.shields.io/badge/Polygon-7B3FE4?logo=polygon&logoColor=white)
 
@@ -8,7 +8,7 @@ India's first blockchain-secured legal platform connecting citizens with Bar Cou
 
 ## Features
 
-- **Verified Lawyers** — Every lawyer is verified against the Bar Council database before appearing on the platform.
+- **Reviewed Lawyer Profiles** — Lawyer profiles are manually reviewed using submitted Bar Council details and supporting documents before appearing publicly.
 - **Blockchain Document Vault** — Case evidence is hashed (SHA-512) and anchored on the Polygon blockchain, ensuring immutability.
 - **Role-Based Dashboards** — Separate views for Clients, Lawyers, and Admins with tailored workflows.
 - **Secure Messaging** — End-to-end case messaging between client and counsel.
@@ -139,7 +139,7 @@ npm start
 
 ### Client
 1. Sign up → Complete onboarding (name, phone, city)
-2. Browse verified lawyers → Pay ₹499 connection fee via Stripe
+2. Browse reviewed lawyer profiles → Pay ₹499 connection fee via Stripe
 3. Lawyer accepts → Case is auto-created with e-token
 4. Upload documents (blockchain-anchored) → Message counsel → Track hearings
 

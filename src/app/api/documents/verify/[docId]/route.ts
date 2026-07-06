@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase/server'
+import { createServiceRoleClient } from '@/lib/supabase/server'
 import { verifyHashOnChain } from '@/lib/blockchain'
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 /**
  * GET /api/documents/verify/[docId]
@@ -18,7 +20,11 @@ export async function GET(
             return NextResponse.json({ error: 'Document ID is required' }, { status: 400 })
         }
 
-        const supabase = await createServerClient()
+        if (!UUID_PATTERN.test(docId)) {
+            return NextResponse.json({ error: 'Invalid document ID' }, { status: 400 })
+        }
+
+        const supabase = createServiceRoleClient()
 
         // Fetch document from DB (include soft-deleted for verification purposes)
         const { data: doc, error: docError } = await supabase

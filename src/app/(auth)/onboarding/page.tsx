@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useUser, useSession } from "@clerk/nextjs"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { trpc } from "@/lib/trpc/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -63,6 +64,8 @@ export default function OnboardingPage() {
     const [selectedRole, setSelectedRole] = useState<Role | null>(null)
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [clientConsent, setClientConsent] = useState(false)
+    const [lawyerConsent, setLawyerConsent] = useState(false)
 
     // Client fields
     const [clientForm, setClientForm] = useState({
@@ -80,6 +83,9 @@ export default function OnboardingPage() {
         fullName: "",
         phone: "",
         barCouncilId: "",
+        stateBarCouncil: "",
+        enrollmentYear: new Date().getFullYear(),
+        verificationDocument: null as File | null,
         city: "",
         state: "",
         bio: "",
@@ -139,6 +145,9 @@ export default function OnboardingPage() {
             if (!clientForm.state) {
                 throw new Error("State is required")
             }
+            if (!clientConsent) {
+                throw new Error("Please accept the Terms, Privacy Policy, and Legal Disclaimer")
+            }
 
             // 1. Set role in Clerk metadata (client-side can only write unsafeMetadata;
             //    the Clerk webhook should copy this to publicMetadata for production)
@@ -183,6 +192,15 @@ export default function OnboardingPage() {
             if (!lawyerForm.barCouncilId.trim()) {
                 throw new Error("Bar Council ID is required")
             }
+            if (!lawyerForm.stateBarCouncil.trim()) {
+                throw new Error("State Bar Council is required")
+            }
+            if (!lawyerForm.enrollmentYear || lawyerForm.enrollmentYear < 1900 || lawyerForm.enrollmentYear > new Date().getFullYear()) {
+                throw new Error("Enter a valid enrolment year")
+            }
+            if (!lawyerForm.verificationDocument) {
+                throw new Error("Upload Certificate of Practice or enrolment proof")
+            }
             if (!lawyerForm.city.trim()) {
                 throw new Error("City is required")
             }
@@ -194,6 +212,9 @@ export default function OnboardingPage() {
             }
             if (lawyerForm.courtLevels.length === 0) {
                 throw new Error("Select at least one court level")
+            }
+            if (!lawyerConsent) {
+                throw new Error("Please confirm the lawyer declaration and verification policy")
             }
 
             // 1. Set role in Clerk metadata
@@ -211,11 +232,26 @@ export default function OnboardingPage() {
                 role: "LAWYER",
             })
 
+            const verificationFormData = new FormData()
+            verificationFormData.append("file", lawyerForm.verificationDocument)
+            const verificationUpload = await fetch("/api/lawyers/verification-document", {
+                method: "POST",
+                body: verificationFormData,
+            })
+            const verificationData = await verificationUpload.json()
+
+            if (!verificationUpload.ok) {
+                throw new Error(verificationData.error || "Failed to upload verification document")
+            }
+
             // 3. Create lawyer profile
             await createLawyerProfile.mutateAsync({
                 fullName: lawyerForm.fullName.trim(),
                 phone: lawyerForm.phone,
                 barCouncilId: lawyerForm.barCouncilId.trim(),
+                stateBarCouncil: lawyerForm.stateBarCouncil.trim(),
+                enrollmentYear: lawyerForm.enrollmentYear,
+                verificationDocumentUrl: verificationData.storagePath,
                 city: lawyerForm.city.trim(),
                 state: lawyerForm.state,
                 bio: lawyerForm.bio.trim() || undefined,
@@ -281,7 +317,7 @@ export default function OnboardingPage() {
                 <div className="w-full max-w-2xl grid grid-cols-1 md:grid-cols-2 gap-6">
                     <RoleCard
                         title="I'm a Client"
-                        description="Find verified lawyers, connect for a flat ₹499 fee, and manage your cases digitally."
+                        description="Find manually reviewed lawyer profiles, connect for a flat ₹499 fee, and manage your cases digitally."
                         icon="👤"
                         onClick={() => handleRoleSelect("CLIENT")}
                     />
@@ -354,6 +390,18 @@ export default function OnboardingPage() {
                             </select>
                         </FormField>
 
+                        <label className="flex items-start gap-3 rounded-lg border border-[#E2E0D9] bg-[#FBF9F4] p-3 text-sm text-[#4A5568]">
+                            <input
+                                type="checkbox"
+                                checked={clientConsent}
+                                onChange={(e) => setClientConsent(e.target.checked)}
+                                className="mt-1"
+                            />
+                            <span>
+                                I agree to the <Link href="/terms" className="text-[#1B2A4A] underline">Terms</Link>, <Link href="/privacy" className="text-[#1B2A4A] underline">Privacy Policy</Link>, and <Link href="/disclaimer" className="text-[#1B2A4A] underline">Legal Disclaimer</Link>. I understand NyaaySetu connects users with independent legal professionals and does not provide legal advice directly.
+                            </span>
+                        </label>
+
                         <div className="flex gap-3 pt-2">
                             <Button
                                 variant="outline"
@@ -364,7 +412,7 @@ export default function OnboardingPage() {
                             </Button>
                             <Button
                                 onClick={handleClientSubmit}
-                                disabled={isSubmitting}
+                                disabled={isSubmitting || !clientConsent}
                                 className="flex-1 bg-[#1B2A4A] text-white hover:bg-[#243760]"
                             >
                                 {isSubmitting ? "Setting up..." : "Continue"}
@@ -422,6 +470,50 @@ export default function OnboardingPage() {
                                 onChange={(e) => setLawyerForm({ ...lawyerForm, barCouncilId: e.target.value })}
                                 className="border-[#E2E0D9] focus-visible:ring-[#C9A84C]"
                             />
+                        </FormField>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <FormField label="State Bar Council" required hint="e.g. Bar Council of Maharashtra & Goa">
+                                <Input
+                                    id="lawyer-stateBarCouncil"
+                                    placeholder="State Bar Council name"
+                                    value={lawyerForm.stateBarCouncil}
+                                    onChange={(e) => setLawyerForm({ ...lawyerForm, stateBarCouncil: e.target.value })}
+                                    className="border-[#E2E0D9] focus-visible:ring-[#C9A84C]"
+                                />
+                            </FormField>
+
+                            <FormField label="Enrolment Year" required>
+                                <Input
+                                    id="lawyer-enrollmentYear"
+                                    type="number"
+                                    min={1900}
+                                    max={new Date().getFullYear()}
+                                    value={lawyerForm.enrollmentYear || ""}
+                                    onChange={(e) =>
+                                        setLawyerForm({
+                                            ...lawyerForm,
+                                            enrollmentYear: parseInt(e.target.value) || new Date().getFullYear(),
+                                        })
+                                    }
+                                    className="border-[#E2E0D9] focus-visible:ring-[#C9A84C]"
+                                />
+                            </FormField>
+                        </div>
+
+                        <FormField label="Certificate of Practice / Enrolment Proof" required hint="PDF, DOC, DOCX, JPG, PNG, or WEBP up to 5MB">
+                            <Input
+                                id="lawyer-verificationDocument"
+                                type="file"
+                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"
+                                onChange={(e) => setLawyerForm({ ...lawyerForm, verificationDocument: e.target.files?.[0] ?? null })}
+                                className="border-[#E2E0D9] focus-visible:ring-[#C9A84C]"
+                            />
+                            {lawyerForm.verificationDocument && (
+                                <p className="text-xs text-[#718096] mt-1">
+                                    Selected: {lawyerForm.verificationDocument.name}
+                                </p>
+                            )}
                         </FormField>
 
                         {/* Row 2: City + State */}
@@ -589,6 +681,18 @@ export default function OnboardingPage() {
                             </p>
                         </FormField>
 
+                        <label className="flex items-start gap-3 rounded-lg border border-[#E2E0D9] bg-[#FBF9F4] p-3 text-sm text-[#4A5568]">
+                            <input
+                                type="checkbox"
+                                checked={lawyerConsent}
+                                onChange={(e) => setLawyerConsent(e.target.checked)}
+                                className="mt-1"
+                            />
+                            <span>
+                                I confirm that my Bar Council details and profile information are true and accurate. I understand NyaaySetu performs manual profile review, not official automated Bar Council verification, and false submissions may lead to rejection or suspension. I agree to the <Link href="/lawyer-verification-policy" className="text-[#1B2A4A] underline">Lawyer Verification Policy</Link>.
+                            </span>
+                        </label>
+
                         {/* Actions */}
                         <div className="flex gap-3 pt-2">
                             <Button
@@ -600,7 +704,7 @@ export default function OnboardingPage() {
                             </Button>
                             <Button
                                 onClick={handleLawyerSubmit}
-                                disabled={isSubmitting}
+                                disabled={isSubmitting || !lawyerConsent}
                                 className="flex-1 bg-[#1B2A4A] text-white hover:bg-[#243760]"
                             >
                                 {isSubmitting ? "Setting up..." : "Submit for Verification"}
@@ -613,7 +717,7 @@ export default function OnboardingPage() {
             {/* Footer note */}
             <p className="text-xs text-[#718096] mt-8 text-center max-w-md">
                 By continuing, you agree to NyaaySetu&apos;s Terms of Service and Privacy Policy.
-                {selectedRole === "LAWYER" && " Your profile will be verified before it goes live."}
+                {selectedRole === "LAWYER" && " Your profile will be manually reviewed before it goes live."}
             </p>
         </div>
     )

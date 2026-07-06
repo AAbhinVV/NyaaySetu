@@ -2,27 +2,52 @@ import { z } from "zod";
 import { createTRPCRouter, lawyerProcedure, protectedProcedure, clientProcedure } from "../init";
 import { TRPCError } from "@trpc/server";
 import { createCaseInternal } from "./case.router";
+import { createStripeCheckoutSession } from "@/lib/stripe";
 
 const connectionStatus = z.enum(['PENDING', 'ACTIVE', 'DECLINED'])
+const CONNECTION_FEE_PAISE = 49900
+
+function getAppUrl() {
+    if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL
+    if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
+    return 'http://localhost:8000'
+}
 
 export const connectionRouter = createTRPCRouter({
 
-    /** Client initiates a connection with a lawyer after payment */
-    createConnection: clientProcedure
+    /** Client starts a secure Stripe Checkout flow for the connection fee. */
+    createConnectionCheckout: clientProcedure
         .input(z.object({
             lawyerId: z.uuid(),
-            stripeSessionId: z.string(),
-            stripePaymentIntentId: z.string(),
-            amount: z.number(),
         }))
         .mutation(async ({ ctx, input }) => {
-            // 1. Check for existing active/pending connection
-            const { count, error: checkError } = await ctx.supabase
+            const { data: lawyer, error: lawyerError } = await ctx.supabase
+                .from('lawyers')
+                .select('id, user_id, full_name, verified')
+                .eq('id', input.lawyerId)
+                .eq('verified', true)
+                .single()
+
+            if (lawyerError || !lawyer) {
+                throw new TRPCError({
+                    code: 'NOT_FOUND',
+                    message: 'Verified lawyer profile not found',
+                })
+            }
+
+            if (lawyer.user_id === ctx.userId) {
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message: 'You cannot connect with your own lawyer profile',
+                })
+            }
+
+            const { data: existingConnection, error: checkError } = await ctx.supabase
                 .from('connections')
-                .select('id', { count: 'exact', head: true })
+                .select('id, status')
                 .eq('client_id', ctx.userId)
-                .eq('lawyer_id', input.lawyerId)
-                .in('status', ['ACTIVE', 'PENDING'])
+                .eq('lawyer_id', lawyer.user_id)
+                .maybeSingle()
 
             if (checkError) {
                 throw new TRPCError({
@@ -31,62 +56,124 @@ export const connectionRouter = createTRPCRouter({
                 })
             }
 
-            if ((count ?? 0) > 0) {
+            if (existingConnection?.status === 'ACTIVE') {
                 throw new TRPCError({
                     code: 'CONFLICT',
-                    message: 'You already have an active or pending connection with this lawyer',
+                    message: 'You are already connected with this lawyer',
                 })
             }
 
-            // 2. Create connection
-            const { data: connection, error: connectionError } = await ctx.supabase
-                .from('connections')
-                .insert({
-                    client_id: ctx.userId,
-                    lawyer_id: input.lawyerId,
-                    status: 'PENDING',
-                })
-                .select()
-                .single()
+            let connection = existingConnection
 
-            if (connectionError || !connection) {
+            if (!connection) {
+                const { data, error: connectionError } = await ctx.supabase
+                    .from('connections')
+                    .insert({
+                        client_id: ctx.userId,
+                        lawyer_id: lawyer.user_id,
+                        status: 'PENDING',
+                    })
+                    .select('id, status')
+                    .single()
+
+                if (connectionError || !data) {
+                    throw new TRPCError({
+                        code: 'INTERNAL_SERVER_ERROR',
+                        message: 'Failed to create connection request',
+                    })
+                }
+
+                connection = data
+            } else if (connection.status === 'DECLINED') {
+                const { data, error: resetError } = await ctx.supabase
+                    .from('connections')
+                    .update({
+                        status: 'PENDING',
+                        decline_reason: null,
+                        accepted_at: null,
+                    })
+                    .eq('id', connection.id)
+                    .select('id, status')
+                    .single()
+
+                if (resetError || !data) {
+                    throw new TRPCError({
+                        code: 'INTERNAL_SERVER_ERROR',
+                        message: 'Failed to restart connection request',
+                    })
+                }
+
+                connection = data
+            }
+
+            const { data: capturedPayment, error: capturedError } = await ctx.supabase
+                .from('payments')
+                .select('id')
+                .eq('connection_id', connection.id)
+                .eq('status', 'CAPTURED')
+                .maybeSingle()
+
+            if (capturedError) {
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Failed to create connection',
+                    message: 'Failed to check payment status',
                 })
             }
 
-            // 3. Create payment record
-            const { error: paymentError } = await ctx.supabase
-                .from('payments')
-                .insert({
-                    connection_id: connection.id,
-                    client_id: ctx.userId,
-                    stripe_session_id: input.stripeSessionId,
-                    stripe_payment_intent_id: input.stripePaymentIntentId,
-                    amount: input.amount,
-                    status: 'CAPTURED',
+            if (capturedPayment) {
+                throw new TRPCError({
+                    code: 'CONFLICT',
+                    message: 'Payment is already completed for this connection request',
                 })
+            }
+
+            const appUrl = getAppUrl()
+            const session = await createStripeCheckoutSession({
+                amount: CONNECTION_FEE_PAISE,
+                connectionId: connection.id,
+                successUrl: `${appUrl}/dashboard/client/lawyers/${input.lawyerId}?payment=success`,
+                cancelUrl: `${appUrl}/dashboard/client/lawyers/${input.lawyerId}?payment=cancelled`,
+                metadata: {
+                    connectionId: connection.id,
+                    clientId: ctx.userId,
+                    lawyerId: lawyer.user_id,
+                    lawyerProfileId: lawyer.id,
+                },
+            })
+
+            const { data: pendingPayment } = await ctx.supabase
+                .from('payments')
+                .select('id')
+                .eq('connection_id', connection.id)
+                .eq('status', 'PENDING')
+                .maybeSingle()
+
+            const paymentPayload = {
+                connection_id: connection.id,
+                client_id: ctx.userId,
+                stripe_session_id: session.id,
+                stripe_payment_intent_id: null,
+                amount: CONNECTION_FEE_PAISE,
+                status: 'PENDING' as const,
+            }
+
+            const paymentMutation = pendingPayment
+                ? ctx.supabase.from('payments').update(paymentPayload).eq('id', pendingPayment.id)
+                : ctx.supabase.from('payments').insert(paymentPayload)
+
+            const { error: paymentError } = await paymentMutation
 
             if (paymentError) {
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Failed to record payment',
+                    message: 'Failed to initialize payment',
                 })
             }
 
-            // 4. Notify the lawyer
-            await ctx.supabase
-                .from('notifications')
-                .insert({
-                    user_id: input.lawyerId,
-                    type: 'CONNECTION_REQUEST',
-                    title: 'New connection request',
-                    body: 'A client has requested to connect with you.',
-                    case_id: null,
-                })
-
-            return connection
+            return {
+                checkoutUrl: session.url,
+                sessionId: session.id,
+            }
         }),
 
     /** Lawyer accepts a pending connection — creates a case */
@@ -113,6 +200,27 @@ export const connectionRouter = createTRPCRouter({
                 throw new TRPCError({
                     code: 'BAD_REQUEST',
                     message: `Cannot accept a connection with status ${connection.status}`,
+                })
+            }
+
+            const { data: payment, error: paymentError } = await ctx.supabase
+                .from('payments')
+                .select('id')
+                .eq('connection_id', connection.id)
+                .eq('status', 'CAPTURED')
+                .maybeSingle()
+
+            if (paymentError) {
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to verify payment',
+                })
+            }
+
+            if (!payment) {
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message: 'Cannot accept this request until payment is verified',
                 })
             }
 
