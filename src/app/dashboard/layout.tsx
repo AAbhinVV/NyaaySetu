@@ -39,35 +39,35 @@ const LAWYER_NAV = [
     { label: "Settings", href: "/dashboard/lawyer/settings", icon: icons.settings },
 ]
 
+const ADMIN_NAV = [
+    { label: "Dashboard", href: "/dashboard/admin", icon: icons.dashboard },
+    { label: "Users & Lawyers", href: "/dashboard/admin/users", icon: icons.lawyers },
+]
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
     const router = useRouter()
     const { user, isLoaded } = useUser()
     const isLawyer = pathname.startsWith("/dashboard/lawyer")
-    const navItems = isLawyer ? LAWYER_NAV : CLIENT_NAV
+    const isAdmin = pathname.startsWith("/dashboard/admin")
+    const role = (user?.publicMetadata as { role?: 'CLIENT' | 'LAWYER' | 'ADMIN' } | undefined)?.role
+    const navItems = isAdmin ? ADMIN_NAV : isLawyer ? LAWYER_NAV : CLIENT_NAV
 
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
     // Onboarding guard: redirect if user hasn't selected a role
     useEffect(() => {
         if (!isLoaded) return
-        const role = (user?.unsafeMetadata as any)?.role ??
-                     (user?.publicMetadata as any)?.role
         if (!role) {
             router.replace("/onboarding")
         }
-    }, [isLoaded, user, router])
+    }, [isLoaded, role, router])
 
     // Live unread count for notification badge
     const unread = trpc.client.getDashboardSummary.useQuery(undefined, {
-        enabled: !isLawyer,
+        enabled: role === 'CLIENT',
     })
     const unreadCount = unread.data?.unreadNotifications ?? 0
-
-    // Close menu when route changes
-    useEffect(() => {
-        setIsMobileMenuOpen(false)
-    }, [pathname])
 
     // Dynamic page title
     useEffect(() => {
@@ -121,6 +121,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                             <Link
                                 key={item.href}
                                 href={item.href}
+                                onClick={() => setIsMobileMenuOpen(false)}
                                 className={`group relative flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-body transition-all duration-150
                                     ${isActive
                                         ? "text-gold bg-gold/10 font-medium"
@@ -147,7 +148,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <UserButton appearance={{ elements: { avatarBox: { width: 36, height: 36 } } }}/>
                     <div className="overflow-hidden">
                         <p className="text-sm font-medium text-white truncate">{user?.firstName || "User"}</p>
-                        <p className="text-xs text-white/45 mt-px">{isLawyer ? "Advocate" : "Client"}</p>
+                        <p className="text-xs text-white/45 mt-px">{isAdmin ? "Administrator" : isLawyer ? "Advocate" : "Client"}</p>
                     </div>
                 </div>
             </aside>

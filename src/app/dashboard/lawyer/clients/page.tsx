@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { trpc } from "@/lib/trpc/client"
+import { firstRelation } from '@/lib/utils'
 
 export default function LawyerClientsPage() {
     const [page, setPage] = useState(1)
@@ -11,7 +12,7 @@ export default function LawyerClientsPage() {
     const totalPages = data?.totalPages ?? 1
 
     const filtered = search.trim()
-        ? connections.filter((c: any) => c.users?.full_name?.toLowerCase().includes(search.toLowerCase()) || c.users?.email?.toLowerCase().includes(search.toLowerCase()))
+        ? connections.filter((c) => firstRelation(c.users)?.full_name?.toLowerCase().includes(search.toLowerCase()) || firstRelation(c.users)?.email?.toLowerCase().includes(search.toLowerCase()))
         : connections
 
     return (
@@ -37,14 +38,14 @@ export default function LawyerClientsPage() {
                 </div>
             ) : (
                 <div className="bg-card rounded-xl shadow-lawyer overflow-hidden">
-                    {filtered.map((conn: any, i: number) => (
+                    {filtered.map((conn, i) => (
                         <div key={conn.id} className={`flex max-md:flex-wrap items-center gap-5 px-6 py-4 hover:bg-muted transition-colors ${i > 0 ? "border-t border-border" : ""}`}>
                             <div className="w-10 h-10 rounded-full bg-primary/[0.08] flex items-center justify-center shrink-0">
-                                <span className="font-serif-heading text-base font-bold text-primary">{(conn.users?.full_name?.[0] ?? "C").toUpperCase()}</span>
+                                <span className="font-serif-heading text-base font-bold text-primary">{(firstRelation(conn.users)?.full_name?.[0] ?? "C").toUpperCase()}</span>
                             </div>
                             <div className="flex-1 min-w-0">
-                                <p className="font-body text-[0.9375rem] font-semibold text-foreground truncate">{conn.users?.full_name ?? "Client"}</p>
-                                <p className="font-body text-xs text-muted-foreground mt-0.5">{conn.users?.email ?? "—"}</p>
+                                <p className="font-body text-[0.9375rem] font-semibold text-foreground truncate">{firstRelation(conn.users)?.full_name ?? "Client"}</p>
+                                <p className="font-body text-xs text-muted-foreground mt-0.5">{firstRelation(conn.users)?.email ?? "—"}</p>
                             </div>
                             <div className="flex gap-6 shrink-0 max-md:w-full">
                                 <div className="flex flex-col">

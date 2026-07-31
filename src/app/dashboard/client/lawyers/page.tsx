@@ -34,16 +34,16 @@ const SORT_OPTIONS = [
 
 export default function FindLawyersPage() {
     const [query, setQuery] = useState("")
-    const [category, setCategory] = useState("")
-    const [courtLevel, setCourtLevel] = useState("")
+    const [category, setCategory] = useState<(typeof SPECIALIZATIONS)[number]['value']>("")
+    const [courtLevel, setCourtLevel] = useState<(typeof COURT_LEVELS)[number]['value']>("")
     const [city, setCity] = useState("")
     const [sortBy, setSortBy] = useState<"rating" | "experience" | "fee" | "win_rate">("rating")
     const [page, setPage] = useState(1)
 
     const lawyers = trpc.lawyer.search.useQuery({
         query: query || undefined,
-        category: (category || undefined) as any,
-        courtLevel: (courtLevel || undefined) as any,
+        category: category || undefined,
+        courtLevel: courtLevel || undefined,
         city: city || undefined,
         sortBy,
         sortOrder: sortBy === "fee" ? "asc" : "desc",
@@ -80,11 +80,11 @@ export default function FindLawyersPage() {
 
                 {/* Filter Row */}
                 <div className="flex flex-wrap gap-3">
-                    <select value={category} onChange={e => { setCategory(e.target.value); setPage(1) }}
+                    <select value={category} onChange={e => { setCategory(e.target.value as typeof category); setPage(1) }}
                         className="font-body text-sm text-foreground bg-muted rounded-lg px-3 py-2 outline-none cursor-pointer border-none focus:ring-1 focus:ring-gold">
                         {SPECIALIZATIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                     </select>
-                    <select value={courtLevel} onChange={e => { setCourtLevel(e.target.value); setPage(1) }}
+                    <select value={courtLevel} onChange={e => { setCourtLevel(e.target.value as typeof courtLevel); setPage(1) }}
                         className="font-body text-sm text-foreground bg-muted rounded-lg px-3 py-2 outline-none cursor-pointer border-none focus:ring-1 focus:ring-gold">
                         {COURT_LEVELS.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                     </select>
@@ -94,7 +94,7 @@ export default function FindLawyersPage() {
                         placeholder="City…"
                         className="font-body text-sm text-foreground bg-muted rounded-lg px-3 py-2 outline-none placeholder:text-muted-foreground/50 focus:ring-1 focus:ring-gold w-32 border-none"
                     />
-                    <select value={sortBy} onChange={e => { setSortBy(e.target.value as any); setPage(1) }}
+                    <select value={sortBy} onChange={e => { setSortBy(e.target.value as typeof sortBy); setPage(1) }}
                         className="font-body text-sm text-foreground bg-muted rounded-lg px-3 py-2 outline-none cursor-pointer border-none focus:ring-1 focus:ring-gold ml-auto">
                         {SORT_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                     </select>
@@ -116,7 +116,7 @@ export default function FindLawyersPage() {
                 </div>
             ) : (
                 <div className="grid grid-cols-2 max-md:grid-cols-1 gap-4">
-                    {results.map((l: any) => (
+                    {results.map((l) => (
                         <Link key={l.id} href={`/dashboard/client/lawyers/${l.id}`}
                             className="bg-card rounded-xl shadow-lawyer hover:shadow-lg hover:-translate-y-px transition-all p-5 no-underline text-inherit block">
                             {/* Header */}

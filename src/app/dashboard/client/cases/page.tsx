@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { trpc } from "@/lib/trpc/client"
+import { firstRelation } from '@/lib/utils'
 
 const STATUS_OPTIONS = [
     { value: "", label: "All Cases" },
@@ -26,9 +27,9 @@ const pillClass: Record<string, string> = {
 }
 
 export default function ClientCasesPage() {
-    const [statusFilter, setStatusFilter] = useState<string>("")
+    const [statusFilter, setStatusFilter] = useState<(typeof STATUS_OPTIONS)[number]['value']>("")
     const [page, setPage] = useState(1)
-    const { data, isLoading } = trpc.client.getMyCases.useQuery({ status: (statusFilter || undefined) as any, page, limit: 8 })
+    const { data, isLoading } = trpc.client.getMyCases.useQuery({ status: statusFilter || undefined, page, limit: 8 })
     const cases = data?.cases ?? []
     const totalPages = data?.totalPages ?? 1
 
@@ -61,7 +62,7 @@ export default function ClientCasesPage() {
                 </div>
             ) : (
                 <div className="flex flex-col bg-card rounded-xl overflow-hidden shadow-lawyer">
-                    {cases.map((c: any, i: number) => (
+                    {cases.map((c, i) => (
                         <Link key={c.id} href={`/dashboard/client/cases/${c.id}`}
                             className={`flex max-md:flex-wrap items-center gap-6 px-6 py-4 hover:bg-muted transition-colors no-underline text-inherit ${i > 0 ? "border-t border-border" : ""}`}>
                             <div className="flex-1 min-w-0">
@@ -71,7 +72,7 @@ export default function ClientCasesPage() {
                             <div className="flex gap-8 shrink-0 max-md:w-full">
                                 <div className="flex flex-col">
                                     <span className="font-body text-[0.625rem] text-muted-foreground/60 uppercase tracking-wider">Counsel</span>
-                                    <span className="font-body text-sm font-medium text-foreground mt-px">{c.lawyers?.full_name ?? "—"}</span>
+                                    <span className="font-body text-sm font-medium text-foreground mt-px">{firstRelation(c.lawyers)?.full_name ?? "—"}</span>
                                 </div>
                                 {c.next_hearing_at && (
                                     <div className="flex flex-col">

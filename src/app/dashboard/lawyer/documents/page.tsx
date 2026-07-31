@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { trpc } from "@/lib/trpc/client"
+import { firstRelation } from '@/lib/utils'
 
 export default function LawyerDocumentsPage() {
     const [selectedCase, setSelectedCase] = useState<string>("")
@@ -32,8 +33,8 @@ export default function LawyerDocumentsPage() {
                 <select value={selectedCase} onChange={e => setSelectedCase(e.target.value)}
                     className="font-body text-sm text-foreground bg-card rounded-lg px-4 py-2.5 min-w-[280px] outline-none shadow-lawyer focus:ring-1 focus:ring-gold cursor-pointer border-none">
                     <option value="">All Cases</option>
-                    {(cases.data?.cases ?? []).map((c: any) => (
-                        <option key={c.id} value={c.id}>{c.title || c.e_token} — {c.users?.full_name ?? "Client"}</option>
+                    {(cases.data?.cases ?? []).map((c) => (
+                        <option key={c.id} value={c.id}>{c.title || c.e_token} — {firstRelation(c.users)?.full_name ?? "Client"}</option>
                     ))}
                 </select>
             </div>
@@ -59,7 +60,7 @@ export default function LawyerDocumentsPage() {
                 </div>
             ) : (
                 <div className="grid grid-cols-2 max-md:grid-cols-1 gap-4">
-                    {(docs.data ?? []).map((d: any) => (
+                    {(docs.data ?? []).map((d) => (
                         <div key={d.id} className="bg-card rounded-xl shadow-lawyer hover:shadow-lg transition-shadow">
                             <div className="p-5">
                                 {/* File header */}
@@ -70,7 +71,7 @@ export default function LawyerDocumentsPage() {
                                     <div className="flex-1 min-w-0">
                                         <h3 className="font-body text-[0.9375rem] font-semibold text-foreground truncate">{d.file_name}</h3>
                                         <p className="font-body text-xs text-muted-foreground mt-0.5">
-                                            Uploaded by {d.users?.full_name ?? "—"} • {new Date(d.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}
+                                            Uploaded by {firstRelation(d.users)?.full_name ?? "—"} • {new Date(d.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}
                                         </p>
                                     </div>
                                 </div>
@@ -108,9 +109,9 @@ export default function LawyerDocumentsPage() {
                                             <p className="font-body text-xs text-muted-foreground">No access logged yet.</p>
                                         ) : (
                                             <div className="flex flex-col gap-2">
-                                                {(accessLog.data ?? []).map((log: any) => (
+                                                {(accessLog.data ?? []).map((log) => (
                                                     <div key={log.id || log.accessed_at} className="flex justify-between items-baseline">
-                                                        <span className="font-body text-xs text-foreground">{log.users?.full_name ?? "Unknown"}</span>
+                                                        <span className="font-body text-xs text-foreground">{firstRelation(log.users)?.full_name ?? "Unknown"}</span>
                                                         <span className="font-body text-[0.625rem] text-muted-foreground/60">{new Date(log.accessed_at).toLocaleString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
                                                     </div>
                                                 ))}

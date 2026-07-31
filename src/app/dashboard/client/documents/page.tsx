@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { trpc } from "@/lib/trpc/client"
+import { firstRelation } from '@/lib/utils'
 
 export default function DocumentVaultPage() {
     const [selectedCase, setSelectedCase] = useState<string>("")
@@ -32,7 +33,7 @@ export default function DocumentVaultPage() {
                 <select value={selectedCase} onChange={e => setSelectedCase(e.target.value)}
                     className="font-body text-sm text-foreground bg-card rounded-lg px-4 py-2.5 min-w-[280px] outline-none shadow-lawyer focus:ring-1 focus:ring-gold cursor-pointer border-none">
                     <option value="">All Cases</option>
-                    {(cases.data?.cases ?? []).map((c: any) => (
+                    {(cases.data?.cases ?? []).map((c) => (
                         <option key={c.id} value={c.id}>{c.title || c.e_token}</option>
                     ))}
                 </select>
@@ -51,7 +52,7 @@ export default function DocumentVaultPage() {
                 </div>
             ) : (
                 <div className="grid grid-cols-2 max-md:grid-cols-1 gap-4">
-                    {(docs.data ?? []).map((d: any) => (
+                    {(docs.data ?? []).map((d) => (
                         <div key={d.id} className="bg-card rounded-xl shadow-lawyer hover:shadow-lg transition-shadow">
                             <div className="p-5">
                                 {/* File header */}
@@ -61,18 +62,18 @@ export default function DocumentVaultPage() {
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <h3 className="font-body text-[0.9375rem] font-semibold text-foreground truncate">{d.file_name}</h3>
-                                        <p className="font-body text-xs text-muted-foreground mt-0.5">{d.document_type || "Document"} • {new Date(d.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}</p>
+                                        <p className="font-body text-xs text-muted-foreground mt-0.5">Case Document • {new Date(d.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}</p>
                                     </div>
                                 </div>
 
                                 {/* Blockchain Badge */}
-                                {d.blockchain_hash && (
+                                {d.chain_tx_id !== 'pending' && (
                                     <div className="bg-emerald/[0.06] rounded-lg px-3 py-2 mb-3">
                                         <div className="flex items-center gap-1.5 mb-1">
                                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#2E7D5E" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>
                                             <span className="font-body text-xs font-semibold text-emerald">Blockchain Verified</span>
                                         </div>
-                                        <p className="font-mono text-[0.5625rem] text-muted-foreground truncate">SHA-512: {d.blockchain_hash}</p>
+                                        <p className="font-mono text-[0.5625rem] text-muted-foreground truncate">SHA-512: {d.sha512_hash}</p>
                                     </div>
                                 )}
 
@@ -98,10 +99,10 @@ export default function DocumentVaultPage() {
                                             <p className="font-body text-xs text-muted-foreground">No access logged yet.</p>
                                         ) : (
                                             <div className="flex flex-col gap-2">
-                                                {(accessLog.data ?? []).map((log: any) => (
+                                                {(accessLog.data ?? []).map((log) => (
                                                     <div key={log.id} className="flex justify-between items-baseline">
-                                                        <span className="font-body text-xs text-foreground">{log.action} by {log.actor_name}</span>
-                                                        <span className="font-body text-[0.625rem] text-muted-foreground/60">{new Date(log.created_at).toLocaleString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                                                        <span className="font-body text-xs text-foreground">Viewed by {firstRelation(log.users)?.full_name ?? 'Unknown user'}</span>
+                                                        <span className="font-body text-[0.625rem] text-muted-foreground/60">{new Date(log.accessed_at).toLocaleString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
                                                     </div>
                                                 ))}
                                             </div>

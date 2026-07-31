@@ -56,7 +56,7 @@ export default function ClientSettingsPage() {
                             <div key={f.key}>
                                 <label className="font-body text-[0.6875rem] text-muted-foreground/60 uppercase tracking-wider block mb-1">{f.label}</label>
                                 <input
-                                    value={(form as any)[f.key]}
+                                    value={form[f.key as keyof typeof form]}
                                     onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))}
                                     placeholder={f.placeholder}
                                     className="w-full bg-muted rounded-lg px-4 py-2.5 font-body text-sm text-foreground outline-none placeholder:text-muted-foreground/50 focus:ring-1 focus:ring-gold border-none"

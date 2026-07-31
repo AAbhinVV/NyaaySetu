@@ -89,7 +89,7 @@ export default function AdminDashboardPage() {
                     </div>
                 ) : (
                     <div className="bg-card rounded-xl shadow-lawyer overflow-hidden">
-                        {(pending.data?.lawyers ?? []).map((lawyer: any, i: number) => (
+                        {(pending.data?.lawyers ?? []).map((lawyer, i) => (
                             <div key={lawyer.id} className={`flex max-md:flex-wrap items-center gap-5 px-6 py-4 ${i > 0 ? "border-t border-border" : ""}`}>
                                 <div className="w-10 h-10 rounded-full bg-gold/[0.08] flex items-center justify-center shrink-0">
                                     <span className="font-serif-heading text-base font-bold text-gold">{(lawyer.full_name?.[0] ?? "L").toUpperCase()}</span>

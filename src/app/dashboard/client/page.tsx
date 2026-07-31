@@ -3,6 +3,7 @@
 import { useUser } from "@clerk/nextjs"
 import Link from "next/link"
 import { trpc } from "@/lib/trpc/client"
+import { firstRelation } from '@/lib/utils'
 
 function StatCard({ value, label, color }: { value: number; label: string; color: string }) {
     return (
@@ -77,7 +78,7 @@ export default function ClientDashboardPage() {
                     </div>
                 ) : (
                     <div className="grid grid-cols-2 max-md:grid-cols-1 gap-4">
-                        {activeCases.map((c: any) => (
+                        {activeCases.map((c) => (
                             <div key={c.id} className="bg-card rounded-xl p-5 shadow-lawyer hover:shadow-lg hover:-translate-y-px transition-all">
                                 <div className="flex justify-between items-start gap-4 mb-5">
                                     <div>
@@ -92,7 +93,7 @@ export default function ClientDashboardPage() {
                                     <div className="flex gap-7">
                                         <div>
                                             <p className="font-body text-[0.6875rem] text-muted-foreground/70 uppercase tracking-wider">Counsel</p>
-                                            <p className="font-body text-sm font-medium text-foreground mt-px">{c.lawyers?.full_name ?? "—"}</p>
+                                            <p className="font-body text-sm font-medium text-foreground mt-px">{firstRelation(c.lawyers)?.full_name ?? "—"}</p>
                                         </div>
                                         {c.next_hearing_at && (
                                             <div>
@@ -126,7 +127,7 @@ export default function ClientDashboardPage() {
                     <div className="font-body text-sm text-muted-foreground p-8 text-center bg-card rounded-xl">No recent activity.</div>
                 ) : (
                     <div className="bg-card rounded-xl shadow-lawyer">
-                        {notifications.map((n: any) => (
+                        {notifications.map((n) => (
                             <div key={n.id} className="flex items-start gap-3.5 px-6 py-4 hover:bg-muted transition-colors">
                                 <div className="w-9 h-9 rounded-lg bg-primary/[0.06] flex items-center justify-center shrink-0 mt-0.5">
                                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-primary"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>

@@ -4,6 +4,7 @@ import { useState, useRef } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { trpc } from "@/lib/trpc/client"
+import { firstRelation } from '@/lib/utils'
 
 const pillClass = (s: string) =>
     s === "IN_PROGRESS" ? "bg-primary/10 text-primary" : s === "HEARING_SET" ? "bg-gold/10 text-[#96790C]" :
@@ -63,8 +64,8 @@ export default function LawyerCaseDetailPage() {
             const data = await res.json()
             if (!res.ok) throw new Error(data.error || "Upload failed")
             documents.refetch()
-        } catch (err: any) {
-            setUploadError(err.message || "Upload failed")
+        } catch (err: unknown) {
+            setUploadError(err instanceof Error ? err.message : "Upload failed")
         } finally {
             setUploading(false)
             if (fileInputRef.current) fileInputRef.current.value = ""
@@ -99,8 +100,8 @@ export default function LawyerCaseDetailPage() {
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-primary"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                     </div>
                     <div>
-                        <p className="font-body text-sm font-semibold text-foreground">{c.users?.full_name ?? "Client"}</p>
-                        <p className="font-body text-xs text-muted-foreground">{c.users?.email} • {c.users?.phone ?? "—"}</p>
+                        <p className="font-body text-sm font-semibold text-foreground">{firstRelation(c.users)?.full_name ?? "Client"}</p>
+                        <p className="font-body text-xs text-muted-foreground">{firstRelation(c.users)?.email} • {firstRelation(c.users)?.phone ?? "—"}</p>
                     </div>
                 </div>
                 {c.next_hearing_at && (
@@ -191,7 +192,7 @@ export default function LawyerCaseDetailPage() {
                         {timeline.isLoading ? <p className="font-body text-sm text-muted-foreground">Loading…</p> :
                         (timeline.data ?? []).length === 0 ? <p className="font-body text-sm text-muted-foreground">No timeline events.</p> :
                         <div className="space-y-4">
-                            {(timeline.data ?? []).map((e: any) => (
+                            {(timeline.data ?? []).map((e) => (
                                 <div key={e.id} className="flex gap-3">
                                     <div className="w-2 h-2 bg-primary rounded-full mt-1.5 shrink-0" />
                                     <div>
@@ -253,12 +254,12 @@ export default function LawyerCaseDetailPage() {
                             </div>
                         ) :
                         <div className="space-y-3">
-                            {(documents.data ?? []).map((d: any) => (
+                            {(documents.data ?? []).map((d) => (
                                 <div key={d.id} className="flex items-center gap-3 px-4 py-3 bg-muted rounded-lg">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-primary shrink-0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
                                     <div className="flex-1 min-w-0">
                                         <p className="font-body text-sm font-medium text-foreground truncate">{d.file_name}</p>
-                                        <p className="font-body text-[0.6875rem] text-muted-foreground/60">by {d.users?.full_name ?? "—"} • {new Date(d.created_at).toLocaleDateString("en-IN")}</p>
+                                        <p className="font-body text-[0.6875rem] text-muted-foreground/60">by {firstRelation(d.users)?.full_name ?? "—"} • {new Date(d.created_at).toLocaleDateString("en-IN")}</p>
                                     </div>
                                     {d.chain_tx_id && <span className="font-body text-[0.625rem] font-semibold px-2 py-0.5 rounded bg-emerald/10 text-emerald shrink-0">On-chain</span>}
                                     <a href={`/api/documents/${d.id}/download`} target="_blank" rel="noopener noreferrer" className="font-body text-[0.625rem] text-primary hover:underline shrink-0">↓</a>

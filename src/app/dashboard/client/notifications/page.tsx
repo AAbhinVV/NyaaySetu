@@ -69,7 +69,7 @@ export default function ClientNotificationsPage() {
                 </div>
             ) : (
                 <div className="bg-card rounded-xl shadow-lawyer overflow-hidden">
-                    {list.map((n: any, i: number) => (
+                    {list.map((n, i) => (
                         <button
                             key={n.id}
                             onClick={() => { if (!n.read) markOne.mutate({ notificationId: n.id }) }}

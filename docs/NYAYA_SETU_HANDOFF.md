@@ -1,4 +1,6 @@
-# Nyaya Setu — Full Project Handoff Document
+# Nyaya Setu — Archived Project Handoff Document
+> **Archive notice (August 2026):** This file records the original design only. The source code, `README.md`, `.env.example`, and ordered files in `supabase/migrations/` are authoritative; examples below may describe superseded authentication and hashing designs.
+>
 > For: Claude Opus 4.6 via Antigravity
 > Purpose: Continue development from exact stopping point
 > Prepared by: Claude Sonnet 4.6

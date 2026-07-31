@@ -29,7 +29,7 @@ export async function GET(
         // Fetch document from DB (include soft-deleted for verification purposes)
         const { data: doc, error: docError } = await supabase
             .from('documents')
-            .select('id, file_name, sha512_hash, chain_tx_id, case_id, created_at, deleted_at')
+            .select('id, sha512_hash, chain_tx_id, created_at, deleted_at')
             .eq('id', docId)
             .single()
 
@@ -52,8 +52,6 @@ export async function GET(
             verified,
             document: {
                 id: doc.id,
-                fileName: doc.file_name,
-                sha512Hash: doc.sha512_hash,
                 chainTxId: doc.chain_tx_id,
                 uploadedAt: doc.created_at,
                 isDeleted: doc.deleted_at !== null,

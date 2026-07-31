@@ -2,6 +2,7 @@ import { z } from "zod";
 import { baseProcedure, clientProcedure, adminProcedure, createTRPCRouter } from "../init";
 import { TRPCError } from "@trpc/server";
 import { recalculateLawyerRating } from './lawyer.router'
+import { createServiceRoleClient } from '@/lib/supabase/server'
 
 const caseResult = z.enum(['WON', 'LOST', 'SETTLED'])
 
@@ -13,10 +14,11 @@ export const reviewRouter = createTRPCRouter({
             page: z.number().min(1).default(1),
             limit: z.number().min(1).max(20).default(10),
         }))
-        .query(async ({ ctx, input }) => {
+        .query(async ({ input }) => {
             const offset = (input.page - 1) * input.limit
+            const publicDb = createServiceRoleClient()
 
-            const { data, count, error } = await ctx.supabase
+            const { data, count, error } = await publicDb
                 .from("reviews")
                 .select(`
                     id,
@@ -62,7 +64,7 @@ export const reviewRouter = createTRPCRouter({
             // 1. Fetch the SPECIFIC case by ID and verify client ownership
             const { data: caseData, error: caseError } = await ctx.supabase
                 .from("cases")
-                .select("id, status, lawyer_id")
+                .select("id, status, lawyer_id, verdict_outcome")
                 .eq("id", input.caseId)
                 .eq("client_id", ctx.userId)
                 .single()
@@ -79,6 +81,13 @@ export const reviewRouter = createTRPCRouter({
                 throw new TRPCError({
                     code: "BAD_REQUEST",
                     message: "Reviews can only be submitted for closed cases",
+                })
+            }
+
+            if (!caseData.verdict_outcome || input.outcome !== caseData.verdict_outcome) {
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message: 'The review outcome must match the recorded case verdict.',
                 })
             }
 
@@ -106,7 +115,7 @@ export const reviewRouter = createTRPCRouter({
                     reviewer_id: ctx.userId,
                     rating: input.rating,
                     outcome: input.outcome,
-                    body: input.body,
+                    body: input.body.trim(),
                 })
                 .select()
                 .single()

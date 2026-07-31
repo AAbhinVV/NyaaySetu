@@ -21,14 +21,14 @@ function StarRating({ rating }: { rating: number }) {
 
 export default function PublicLawyerDirectoryPage() {
     const [query, setQuery] = useState("")
-    const [category, setCategory] = useState<string>("")
-    const [courtLevel, setCourtLevel] = useState<string>("")
+    const [category, setCategory] = useState<(typeof CATEGORIES)[number]>("")
+    const [courtLevel, setCourtLevel] = useState<(typeof COURT_LEVELS)[number]>("")
     const [page, setPage] = useState(1)
 
     const { data, isLoading } = trpc.lawyer.search.useQuery({
         query: query || undefined,
-        category: (category || undefined) as any,
-        courtLevel: (courtLevel || undefined) as any,
+        category: category || undefined,
+        courtLevel: courtLevel || undefined,
         verifiedOnly: true,
         page,
         limit: 12,
@@ -57,13 +57,13 @@ export default function PublicLawyerDirectoryPage() {
                             className="w-full bg-muted rounded-lg pl-10 pr-4 py-2.5 font-body text-sm text-foreground outline-none placeholder:text-muted-foreground/50 focus:ring-1 focus:ring-gold border-none" />
                     </div>
                     {/* Category */}
-                    <select value={category} onChange={e => { setCategory(e.target.value); setPage(1) }}
+                    <select value={category} onChange={e => { setCategory(e.target.value as (typeof CATEGORIES)[number]); setPage(1) }}
                         className="bg-muted rounded-lg px-4 py-2.5 font-body text-sm text-foreground outline-none focus:ring-1 focus:ring-gold cursor-pointer border-none min-w-[160px]">
                         <option value="">All Specializations</option>
                         {CATEGORIES.filter(Boolean).map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                     {/* Court Level */}
-                    <select value={courtLevel} onChange={e => { setCourtLevel(e.target.value); setPage(1) }}
+                    <select value={courtLevel} onChange={e => { setCourtLevel(e.target.value as (typeof COURT_LEVELS)[number]); setPage(1) }}
                         className="bg-muted rounded-lg px-4 py-2.5 font-body text-sm text-foreground outline-none focus:ring-1 focus:ring-gold cursor-pointer border-none min-w-[160px]">
                         <option value="">All Courts</option>
                         {COURT_LEVELS.filter(Boolean).map(c => <option key={c} value={c}>{c!.replace(/_/g, " ")}</option>)}
@@ -81,7 +81,7 @@ export default function PublicLawyerDirectoryPage() {
                 </div>
             ) : (
                 <div className="grid grid-cols-3 max-md:grid-cols-1 gap-5">
-                    {lawyers.map((lawyer: any) => (
+                    {lawyers.map((lawyer) => (
                         <Link key={lawyer.id} href={`/lawyers/${lawyer.id}`} className="bg-card rounded-xl shadow-lawyer p-5 hover:shadow-lg transition-shadow block no-underline text-inherit group">
                             {/* Avatar + Name */}
                             <div className="flex items-center gap-3 mb-4">

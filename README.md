@@ -11,10 +11,10 @@ Blockchain-secured legal platform connecting citizens with manually reviewed law
 - **Reviewed Lawyer Profiles** — Lawyer profiles are manually reviewed using submitted Bar Council details and supporting documents before appearing publicly.
 - **Blockchain Document Vault** — Case evidence is hashed (SHA-512) and anchored on the Polygon blockchain, ensuring immutability.
 - **Role-Based Dashboards** — Separate views for Clients, Lawyers, and Admins with tailored workflows.
-- **Secure Messaging** — End-to-end case messaging between client and counsel.
+- **Case Messaging** — Access-controlled messages between a client and their counsel.
 - **Case Management** — Full lifecycle from filing → hearings → verdict with a visual timeline.
 - **Stripe Payments** — Flat ₹499 connection fee processed via Stripe Checkout.
-- **Real-Time Notifications** — In-app notification system with mark-as-read and badge counts.
+- **In-App Notifications** — Notification inbox with mark-as-read and badge counts.
 - **Admin Panel** — Platform statistics, lawyer verification queue, and user management.
 
 ---
@@ -103,6 +103,7 @@ SUPABASE_SERVICE_ROLE_KEY=eyJ...
 
 # Blockchain (Polygon)
 POLYGON_RPC_URL=https://polygon-mainnet.infura.io/v3/...
+POLYGON_CHAIN_ID=137
 BLOCKCHAIN_PRIVATE_KEY=...
 CONTRACT_ADDRESS=0x...
 
@@ -119,6 +120,8 @@ UPSTASH_REDIS_REST_TOKEN=...
 ```
 
 ### 3. Run Development Server
+
+Apply every SQL file in `supabase/migrations/` to the target Supabase project in filename order before starting the app. Keep the `documents` Storage bucket private; the hardening migration creates or corrects it automatically.
 
 ```bash
 npm run dev

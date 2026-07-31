@@ -1,8 +1,12 @@
 import { z } from "zod";
 import { createTRPCRouter, lawyerProcedure, protectedProcedure, clientProcedure } from "../init";
 import { TRPCError } from "@trpc/server";
-import { createCaseInternal } from "./case.router";
-import { createStripeCheckoutSession } from "@/lib/stripe";
+import {
+    createStripeCheckoutSession,
+    expireStripeSession,
+    retrieveStripeSession,
+} from "@/lib/stripe";
+import { checkRateLimit } from '@/lib/ratelimit'
 
 const connectionStatus = z.enum(['PENDING', 'ACTIVE', 'DECLINED'])
 const CONNECTION_FEE_PAISE = 49900
@@ -21,6 +25,14 @@ export const connectionRouter = createTRPCRouter({
             lawyerId: z.uuid(),
         }))
         .mutation(async ({ ctx, input }) => {
+            const rateLimit = await checkRateLimit('payment', ctx.userId)
+            if (!rateLimit.success) {
+                throw new TRPCError({
+                    code: 'TOO_MANY_REQUESTS',
+                    message: 'Too many payment attempts. Please wait and try again.',
+                })
+            }
+
             const { data: lawyer, error: lawyerError } = await ctx.supabase
                 .from('lawyers')
                 .select('id, user_id, full_name, verified')
@@ -127,6 +139,59 @@ export const connectionRouter = createTRPCRouter({
                 })
             }
 
+            const { data: pendingPayment, error: pendingError } = await ctx.supabase
+                .from('payments')
+                .select('id, stripe_session_id')
+                .eq('connection_id', connection.id)
+                .eq('status', 'PENDING')
+                .maybeSingle()
+
+            if (pendingError) {
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to check the pending payment.',
+                })
+            }
+
+            if (pendingPayment) {
+                try {
+                    const pendingSession = await retrieveStripeSession(pendingPayment.stripe_session_id)
+                    if (pendingSession.status === 'open' && pendingSession.url) {
+                        return {
+                            checkoutUrl: pendingSession.url,
+                            sessionId: pendingSession.id,
+                        }
+                    }
+                } catch {
+                    // Reconcile the local row below and create a fresh attempt.
+                }
+
+                const { error: stalePaymentError } = await ctx.supabase
+                    .from('payments')
+                    .update({ status: 'FAILED' })
+                    .eq('id', pendingPayment.id)
+                    .eq('status', 'PENDING')
+
+                if (stalePaymentError) {
+                    throw new TRPCError({
+                        code: 'INTERNAL_SERVER_ERROR',
+                        message: 'Failed to reconcile the previous payment attempt.',
+                    })
+                }
+            }
+
+            const { count: attemptCount, error: attemptCountError } = await ctx.supabase
+                .from('payments')
+                .select('id', { count: 'exact', head: true })
+                .eq('connection_id', connection.id)
+
+            if (attemptCountError) {
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to initialize the payment attempt.',
+                })
+            }
+
             const appUrl = getAppUrl()
             const session = await createStripeCheckoutSession({
                 amount: CONNECTION_FEE_PAISE,
@@ -139,14 +204,8 @@ export const connectionRouter = createTRPCRouter({
                     lawyerId: lawyer.user_id,
                     lawyerProfileId: lawyer.id,
                 },
+                idempotencyKey: `connection:${connection.id}:attempt:${(attemptCount ?? 0) + 1}`,
             })
-
-            const { data: pendingPayment } = await ctx.supabase
-                .from('payments')
-                .select('id')
-                .eq('connection_id', connection.id)
-                .eq('status', 'PENDING')
-                .maybeSingle()
 
             const paymentPayload = {
                 connection_id: connection.id,
@@ -157,13 +216,29 @@ export const connectionRouter = createTRPCRouter({
                 status: 'PENDING' as const,
             }
 
-            const paymentMutation = pendingPayment
-                ? ctx.supabase.from('payments').update(paymentPayload).eq('id', pendingPayment.id)
-                : ctx.supabase.from('payments').insert(paymentPayload)
-
-            const { error: paymentError } = await paymentMutation
+            const { error: paymentError } = await ctx.supabase
+                .from('payments')
+                .insert(paymentPayload)
 
             if (paymentError) {
+                if (paymentError.code === '23505' && session.url) {
+                    const { data: concurrentPayment } = await ctx.supabase
+                        .from('payments')
+                        .select('id')
+                        .eq('stripe_session_id', session.id)
+                        .maybeSingle()
+
+                    if (concurrentPayment) {
+                        return { checkoutUrl: session.url, sessionId: session.id }
+                    }
+                }
+
+                try {
+                    await expireStripeSession(session.id)
+                } catch {
+                    // Stripe may already have expired the session; the important
+                    // invariant is that it is never returned to the client.
+                }
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to initialize payment',
@@ -224,52 +299,31 @@ export const connectionRouter = createTRPCRouter({
                 })
             }
 
-            // 3. Update connection to ACTIVE
-            const { data: updatedConnection, error: updateError } = await ctx.supabase
+            const { data: newCase, error: acceptError } = await ctx.supabase
+                .rpc('accept_connection_and_create_case', {
+                    p_connection_id: connection.id,
+                    p_lawyer_id: ctx.userId,
+                })
+
+            if (acceptError || !newCase) {
+                throw new TRPCError({
+                    code: 'CONFLICT',
+                    message: 'This connection could not be accepted. Refresh and try again.',
+                })
+            }
+
+            const { data: updatedConnection, error: updatedConnectionError } = await ctx.supabase
                 .from('connections')
-                .update({ status: 'ACTIVE', accepted_at: new Date().toISOString() })
-                .eq('id', input.connectionId)
                 .select()
+                .eq('id', connection.id)
                 .single()
 
-            if (updateError || !updatedConnection) {
+            if (updatedConnectionError || !updatedConnection) {
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Failed to update connection status',
+                    message: 'The case was created but the connection could not be reloaded.',
                 })
             }
-
-            // 4. Create the case via the shared internal function
-            let newCase
-            try {
-                newCase = await createCaseInternal(ctx, {
-                    connectionId: connection.id,
-                    clientId: connection.client_id,
-                    lawyerId: connection.lawyer_id,
-                })
-            } catch {
-                // Roll back connection to PENDING so the lawyer can retry
-                await ctx.supabase
-                    .from('connections')
-                    .update({ status: 'PENDING', accepted_at: null })
-                    .eq('id', input.connectionId)
-
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Connection accepted but case creation failed. Please try again.',
-                })
-            }
-
-            // 5. Notify the client
-            await ctx.supabase
-                .from('notifications')
-                .insert({
-                    user_id: connection.client_id,
-                    type: 'CONNECTION_ACCEPTED',
-                    title: 'Your lawyer has accepted your request',
-                    body: 'Your connection has been accepted. Your case has been created and is now active.',
-                    case_id: newCase.id,
-                })
 
             return {
                 connection: updatedConnection,
@@ -314,8 +368,9 @@ export const connectionRouter = createTRPCRouter({
                     decline_reason: input.reason ?? null,
                 })
                 .eq('id', input.connectionId)
+                .eq('status', 'PENDING')
                 .select()
-                .single()
+                .maybeSingle()
 
             if (updateError || !updatedConnection) {
                 throw new TRPCError({
@@ -362,7 +417,7 @@ export const connectionRouter = createTRPCRouter({
                         full_name,
                         email
                     ),
-                    payments (
+                    payments!inner (
                         id,
                         status,
                         amount,
@@ -370,6 +425,7 @@ export const connectionRouter = createTRPCRouter({
                     )
                 `, { count: 'exact' })
                 .eq('lawyer_id', ctx.userId)
+                .eq('payments.status', 'CAPTURED')
                 .order('created_at', { ascending: false })
                 .range(offset, offset + input.limit - 1)
 
@@ -446,12 +502,15 @@ export const connectionRouter = createTRPCRouter({
             lawyerId: z.uuid(),
         }))
         .query(async ({ ctx, input }) => {
-            // Scope to ctx.userId — check if current user is either the client or lawyer
+            if (ctx.userId !== input.clientId && ctx.userId !== input.lawyerId) {
+                throw new TRPCError({ code: 'FORBIDDEN' })
+            }
+
             const { data, error } = await ctx.supabase
                 .from('connections')
                 .select('id, status')
-                .or(`client_id.eq.${ctx.userId},lawyer_id.eq.${ctx.userId}`)
-                .or(`client_id.eq.${input.clientId},lawyer_id.eq.${input.lawyerId}`)
+                .eq('client_id', input.clientId)
+                .eq('lawyer_id', input.lawyerId)
                 .in('status', ['ACTIVE', 'PENDING'])
                 .maybeSingle()
 

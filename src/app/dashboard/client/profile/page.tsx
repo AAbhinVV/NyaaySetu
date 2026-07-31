@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useUser } from "@clerk/nextjs"
 import { trpc } from "@/lib/trpc/client"
+import { firstRelation } from '@/lib/utils'
 
 export default function ClientProfilePage() {
     const { user } = useUser()
@@ -59,7 +60,7 @@ export default function ClientProfilePage() {
                             <div key={f.key}>
                                 <label className="font-body text-[0.6875rem] text-muted-foreground/60 uppercase tracking-wider block mb-1">{f.label}</label>
                                 <input
-                                    value={(form as any)[f.key]}
+                                    value={form[f.key as keyof typeof form]}
                                     onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))}
                                     placeholder={f.placeholder}
                                     className="w-full bg-muted rounded-lg px-4 py-2.5 font-body text-sm text-foreground outline-none placeholder:text-muted-foreground/50 focus:ring-1 focus:ring-gold border-none"
@@ -100,14 +101,14 @@ export default function ClientProfilePage() {
                     </div>
                 ) : (
                     <div className="bg-card rounded-xl shadow-lawyer overflow-hidden">
-                        {connList.map((c: any, i: number) => (
+                        {connList.map((c, i) => (
                             <div key={c.id} className={`flex items-center gap-4 px-6 py-4 ${i > 0 ? "border-t border-border" : ""}`}>
                                 <div className="w-10 h-10 rounded-lg bg-primary/[0.06] flex items-center justify-center shrink-0">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-primary"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                    <p className="font-body text-sm font-semibold text-foreground truncate">{c.lawyers?.full_name ?? "Lawyer"}</p>
-                                    <p className="font-body text-xs text-muted-foreground">{c.lawyers?.city}, {c.lawyers?.state} • {c.lawyers?.specializations?.join(", ")}</p>
+                                    <p className="font-body text-sm font-semibold text-foreground truncate">{firstRelation(c.lawyers)?.full_name ?? "Lawyer"}</p>
+                                    <p className="font-body text-xs text-muted-foreground">{firstRelation(c.lawyers)?.city}, {firstRelation(c.lawyers)?.state} • {firstRelation(c.lawyers)?.specializations?.join(", ")}</p>
                                 </div>
                                 <span className="font-body text-[0.6875rem] font-semibold px-2.5 py-0.5 rounded-md bg-emerald/10 text-emerald shrink-0">Active</span>
                             </div>

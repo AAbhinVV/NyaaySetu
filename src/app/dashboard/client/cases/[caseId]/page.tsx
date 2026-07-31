@@ -57,8 +57,8 @@ export default function CaseDetailPage() {
             const data = await res.json()
             if (!res.ok) throw new Error(data.error || "Upload failed")
             docs.refetch()
-        } catch (err: any) {
-            setUploadError(err.message || "Upload failed")
+        } catch (err: unknown) {
+            setUploadError(err instanceof Error ? err.message : "Upload failed")
         } finally {
             setUploading(false)
             if (fileInputRef.current) fileInputRef.current.value = ""
@@ -124,12 +124,12 @@ export default function CaseDetailPage() {
                     {timelineEvents.length > 0 ? (
                         <div className="relative pl-6">
                             <div className="absolute left-[11px] top-2 bottom-2 w-px bg-muted"/>
-                            {timelineEvents.map((ev: any, i: number) => (
+                            {timelineEvents.map((ev, i) => (
                                 <div key={i} className="relative flex items-start gap-4 py-3">
                                     <div className="absolute left-[-17px] top-4 w-[7px] h-[7px] rounded-full bg-primary ring-[3px] ring-card"/>
                                     <div>
-                                        <p className="font-body text-sm font-semibold text-foreground">{ev.event || ev.title}</p>
-                                        <p className="font-body text-xs text-muted-foreground mt-0.5">{new Date(ev.created_at || ev.date).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}</p>
+                                        <p className="font-body text-sm font-semibold text-foreground">{ev.event_type.replace(/_/g, ' ')}</p>
+                                        <p className="font-body text-xs text-muted-foreground mt-0.5">{new Date(ev.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}</p>
                                         {ev.description && <p className="font-body text-xs text-foreground/70 mt-1">{ev.description}</p>}
                                     </div>
                                 </div>
@@ -148,7 +148,7 @@ export default function CaseDetailPage() {
                         {msgList.length === 0 ? (
                             <p className="font-body text-sm text-muted-foreground text-center py-8">No messages yet. Start the conversation.</p>
                         ) : (
-                            msgList.map((m: any) => {
+                            msgList.map((m) => {
                                 const isOwn = m.sender_id === detail.data?.client_id
                                 return (
                                     <div key={m.id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}>
@@ -213,7 +213,7 @@ export default function CaseDetailPage() {
                         </div>
                     ) : (
                         <div className="grid grid-cols-2 max-md:grid-cols-1 gap-4">
-                            {docList.map((d: any) => (
+                            {docList.map((d) => (
                                 <div key={d.id} className="flex items-start gap-3 p-4 rounded-lg bg-muted">
                                     <div className="w-10 h-10 rounded-lg bg-primary/[0.06] flex items-center justify-center shrink-0">
                                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-primary"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14,2 14,8 20,8"/></svg>
@@ -269,7 +269,7 @@ export default function CaseDetailPage() {
                             {/* Outcome */}
                             <div>
                                 <label className="font-body text-[0.6875rem] text-muted-foreground/60 uppercase tracking-wider block mb-1">Case Outcome</label>
-                                <select value={reviewOutcome} onChange={e => setReviewOutcome(e.target.value as any)}
+                                <select value={reviewOutcome} onChange={e => setReviewOutcome(e.target.value as typeof reviewOutcome)}
                                     className="font-body text-sm text-foreground bg-muted rounded-lg px-4 py-2.5 outline-none border-none cursor-pointer focus:ring-1 focus:ring-gold">
                                     <option value="WON">Won</option>
                                     <option value="LOST">Lost</option>

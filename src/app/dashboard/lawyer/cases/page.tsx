@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { trpc } from "@/lib/trpc/client"
+import { firstRelation } from '@/lib/utils'
 
 const STATUSES = [
     { value: "", label: "All Cases" },
@@ -25,11 +26,11 @@ const statusLabel = (s: string) =>
     s === "CLOSED" ? "Closed" : s
 
 export default function LawyerCasesPage() {
-    const [status, setStatus] = useState<string>("")
+    const [status, setStatus] = useState<(typeof STATUSES)[number]['value']>("")
     const [page, setPage] = useState(1)
 
     const cases = trpc.case.getAllCases.useQuery({
-        status: (status || undefined) as any,
+        status: status || undefined,
         page,
         limit: 10,
     })
@@ -72,13 +73,13 @@ export default function LawyerCasesPage() {
                 </div>
             ) : (
                 <div className="flex flex-col bg-card rounded-xl overflow-hidden shadow-lawyer">
-                    {caseList.map((c: any, i: number) => (
+                    {caseList.map((c, i) => (
                         <Link key={c.id} href={`/dashboard/lawyer/cases/${c.id}`}
                             className={`flex max-md:flex-wrap items-center gap-6 px-6 py-4 hover:bg-muted transition-colors no-underline text-inherit ${i > 0 ? "border-t border-border" : ""}`}>
                             <div className="flex-1 min-w-0">
                                 <h3 className="font-body text-[0.9375rem] font-semibold text-foreground truncate">{c.title || "Untitled Case"}</h3>
                                 <p className="font-body text-xs text-muted-foreground mt-0.5">
-                                    Client: {c.users?.full_name ?? "—"} • {c.jurisdiction_city ?? "—"} • {c.e_token}
+                                    Client: {firstRelation(c.users)?.full_name ?? "—"} • {c.jurisdiction_city ?? "—"} • {c.e_token}
                                 </p>
                             </div>
                             {c.next_hearing_at && (

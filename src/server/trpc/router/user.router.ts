@@ -117,82 +117,104 @@ export const userRouter = createTRPCRouter({
     completeOnboarding: onboardingProcedure
         .input(z.object({
             fullName: z.string().min(2),
-            email: z.email(),
             phone: z.string().regex(/^[6-9]\d{9}$/),
             city: z.string().min(1),
             state: z.string().min(1),
             role: z.enum(['CLIENT', 'LAWYER']),
         }))
         .mutation(async ({ ctx, input }) => {
-            // Use service role client to bypass RLS (no INSERT policy on users table)
-            const { createServiceRoleClient } = await import('@/lib/supabase/server')
-            const serviceSupabase = createServiceRoleClient()
+            const { clerkClient } = await import('@clerk/nextjs/server')
+            const clerk = await clerkClient()
+            const clerkUser = await clerk.users.getUser(ctx.clerkUserId)
+            const primaryEmail = clerkUser.emailAddresses.find(
+                (address) => address.id === clerkUser.primaryEmailAddressId
+            )?.emailAddress
+
+            if (!primaryEmail) {
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message: 'Your Clerk account does not have a primary email address.',
+                })
+            }
+
+            const { data: existing, error: existingError } = await ctx.serviceSupabase
+                .from('users')
+                .select('id, role, onboarding_completed')
+                .eq('clerk_user_id', ctx.clerkUserId)
+                .maybeSingle()
+
+            if (existingError) {
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to check the existing account.',
+                })
+            }
+
+            if (existing?.onboarding_completed && existing.role !== input.role) {
+                throw new TRPCError({
+                    code: 'CONFLICT',
+                    message: 'Your account role is already set. Contact support to change it.',
+                })
+            }
+
+            const { data: emailOwner, error: emailCheckError } = await ctx.serviceSupabase
+                .from('users')
+                .select('clerk_user_id')
+                .eq('email', primaryEmail)
+                .neq('clerk_user_id', ctx.clerkUserId)
+                .maybeSingle()
+
+            if (emailCheckError) {
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to validate the email address.',
+                })
+            }
+
+            if (emailOwner) {
+                throw new TRPCError({
+                    code: 'CONFLICT',
+                    message: 'This email address is already linked to another account.',
+                })
+            }
 
             const userData = {
                 clerk_user_id: ctx.clerkUserId,
-                full_name: input.fullName,
-                email: input.email,
+                full_name: input.fullName.trim(),
+                email: primaryEmail,
                 phone: input.phone,
-                city: input.city,
-                state: input.state,
+                city: input.city.trim(),
+                state: input.state.trim(),
                 role: input.role,
+                onboarding_completed: true,
             }
 
-            console.log('[onboarding] Attempting to create user:', { clerkUserId: ctx.clerkUserId, role: input.role })
-
-            // Try insert first
-            const { data: insertData, error: insertError } = await serviceSupabase
+            const { error: saveError } = await ctx.serviceSupabase
                 .from('users')
-                .insert(userData)
-                .select('id')
-                .single()
+                .upsert(userData, { onConflict: 'clerk_user_id' })
 
-            if (insertError) {
-                console.error('[onboarding] Insert failed:', insertError.code, insertError.message)
-
-                // Row already exists (from webhook) — do an explicit update
-                if (insertError.code === '23505') {
-                    const { error: updateError } = await serviceSupabase
-                        .from('users')
-                        .update({
-                            full_name: input.fullName,
-                            email: input.email,
-                            phone: input.phone,
-                            city: input.city,
-                            state: input.state,
-                            role: input.role,
-                        })
-                        .eq('clerk_user_id', ctx.clerkUserId)
-
-                    if (updateError) {
-                        console.error('[onboarding] Update failed:', updateError.message)
-                        throw new TRPCError({
-                            code: 'INTERNAL_SERVER_ERROR',
-                            message: `Failed to update profile: ${updateError.message}`,
-                        })
-                    }
-                    console.log('[onboarding] Updated existing user for clerk:', ctx.clerkUserId)
-                } else {
-                    throw new TRPCError({
-                        code: 'INTERNAL_SERVER_ERROR',
-                        message: `Failed to save profile: ${insertError.message}`,
-                    })
-                }
-            } else {
-                console.log('[onboarding] User created successfully:', insertData?.id)
+            if (saveError) {
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: `Failed to save profile: ${saveError.message}`,
+                })
             }
 
-            // Set role in Clerk publicMetadata (server-side via Backend SDK).
-            // This is included in the JWT so the middleware can read it.
             try {
-                const { clerkClient } = await import('@clerk/nextjs/server')
-                const clerk = await clerkClient()
                 await clerk.users.updateUserMetadata(ctx.clerkUserId, {
-                    publicMetadata: { role: input.role },
+                    publicMetadata: {
+                        ...clerkUser.publicMetadata,
+                        role: input.role,
+                        suspended: false,
+                    },
+                    unsafeMetadata: {},
                 })
             } catch (clerkErr) {
                 console.error('Failed to set Clerk publicMetadata:', clerkErr)
-                // Non-fatal — the user row is already created in Supabase
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Profile was saved, but the session could not be updated. Please retry.',
+                })
             }
 
             return { success: true }
