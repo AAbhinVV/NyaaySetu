@@ -24,6 +24,7 @@ export default function RootLayout({
         >
             <html lang="en">
                 <body
+                    suppressHydrationWarning
                     className={`${cormorantGaramond.variable} ${inter.variable} ${dmSans.variable} font-body antialiased`}
                 >
                     <TRPCProvider>

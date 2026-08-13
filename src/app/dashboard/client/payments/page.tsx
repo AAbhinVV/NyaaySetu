@@ -2,6 +2,7 @@
 
 import { trpc } from "@/lib/trpc/client"
 import Link from "next/link"
+import { firstRelation } from '@/lib/utils'
 
 function statusBadge(s: string) {
     return s === "ACTIVE" ? "bg-emerald/10 text-[#226B4B]" : s === "PENDING" ? "bg-gold/12 text-[#96790C]" : "bg-muted text-muted-foreground"
@@ -21,15 +22,15 @@ export default function ClientPaymentsPage() {
             {/* Summary Cards */}
             <section className="grid grid-cols-3 max-md:grid-cols-1 gap-4 mb-8">
                 <div className="bg-card rounded-xl p-5 shadow-lawyer">
-                    <p className="font-serif-heading text-3xl font-bold text-primary">{connList.filter((c: any) => c.status === "ACTIVE").length}</p>
+                    <p className="font-serif-heading text-3xl font-bold text-primary">{connList.filter((c) => c.status === "ACTIVE").length}</p>
                     <p className="font-body text-sm text-muted-foreground mt-1">Completed Payments</p>
                 </div>
                 <div className="bg-card rounded-xl p-5 shadow-lawyer">
-                    <p className="font-serif-heading text-3xl font-bold text-gold">{connList.filter((c: any) => c.status === "PENDING").length}</p>
+                    <p className="font-serif-heading text-3xl font-bold text-gold">{connList.filter((c) => c.status === "PENDING").length}</p>
                     <p className="font-body text-sm text-muted-foreground mt-1">Pending</p>
                 </div>
                 <div className="bg-card rounded-xl p-5 shadow-lawyer">
-                    <p className="font-serif-heading text-3xl font-bold text-emerald">₹{(connList.filter((c: any) => c.status === "ACTIVE").length * 499).toLocaleString("en-IN")}</p>
+                    <p className="font-serif-heading text-3xl font-bold text-emerald">₹{(connList.filter((c) => c.status === "ACTIVE").length * 499).toLocaleString("en-IN")}</p>
                     <p className="font-body text-sm text-muted-foreground mt-1">Total Spent</p>
                 </div>
             </section>
@@ -47,14 +48,14 @@ export default function ClientPaymentsPage() {
                     </div>
                 ) : (
                     <div className="bg-card rounded-xl shadow-lawyer overflow-hidden">
-                        {connList.map((conn: any, i: number) => (
+                        {connList.map((conn, i) => (
                             <div key={conn.id} className={`flex max-md:flex-wrap items-center gap-5 px-6 py-4 ${i > 0 ? "border-t border-border" : ""}`}>
                                 <div className="w-10 h-10 rounded-lg bg-primary/[0.06] flex items-center justify-center shrink-0">
                                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-primary"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <p className="font-body text-[0.9375rem] font-semibold text-foreground truncate">
-                                        Lawyer Connection — {conn.lawyers?.full_name ?? "Lawyer"}
+                                        Lawyer Connection — {firstRelation(conn.lawyers)?.full_name ?? "Lawyer"}
                                     </p>
                                     <p className="font-body text-xs text-muted-foreground mt-0.5">
                                         {new Date(conn.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}

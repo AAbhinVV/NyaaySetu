@@ -47,7 +47,7 @@ export const clientRouter = createTRPCRouter({
                 // next 3 upcoming hearings
                 ctx.supabase
                     .from('cases')
-                    .select('id, title, next_hearing_at, status, lawyers(full_name)')
+                    .select('id, title, next_hearing_at, status, lawyers!cases_lawyer_profile_fkey(full_name)')
                     .eq('client_id', ctx.userId)
                     .in('status', ['IN_PROGRESS', 'HEARING_SET'])
                     .not('next_hearing_at', 'is', null)
@@ -82,7 +82,7 @@ export const clientRouter = createTRPCRouter({
                     id,
                     lawyer_id,
                     saved_at,
-                    lawyers (
+                    lawyers!saved_lawyers_lawyer_id_fkey (
                         id,
                         full_name,
                         bio,
@@ -129,7 +129,7 @@ export const clientRouter = createTRPCRouter({
                     lawyer_id,
                     status,
                     created_at,
-                    lawyers (
+                    lawyers!connections_lawyer_profile_fkey (
                         id,
                         full_name,
                         bio,
@@ -222,7 +222,7 @@ export const clientRouter = createTRPCRouter({
                     next_hearing_at,
                     e_token,
                     created_at,
-                    lawyers ( full_name )
+                    lawyers!cases_lawyer_profile_fkey ( full_name )
                 `, { count: 'exact' })
                 .eq('client_id', ctx.userId)
                 .order('created_at', { ascending: false })
@@ -258,7 +258,7 @@ export const clientRouter = createTRPCRouter({
                 .from('cases')
                 .select(`
                     *,
-                    lawyers (
+                    lawyers!cases_lawyer_profile_fkey (
                         id,
                         full_name,
                         bio,
@@ -726,7 +726,7 @@ export const clientRouter = createTRPCRouter({
                         category,
                         created_at
                     ),
-                    lawyers (
+                    lawyers!reviews_lawyer_profile_fkey (
                         id,
                         full_name,
                         specializations,

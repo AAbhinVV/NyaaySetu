@@ -1,12 +1,15 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "../init";
 import { TRPCError } from "@trpc/server";
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { anchorHashOnChain } from '@/lib/blockchain'
+import { checkRateLimit } from '@/lib/ratelimit'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Verify the current user is a party on the case. Returns the case row. */
 async function verifyCaseAccess(
-    supabase: any,
+    supabase: SupabaseClient,
     caseId: string,
     userId: string
 ) {
@@ -14,10 +17,9 @@ async function verifyCaseAccess(
         .from('cases')
         .select('id, client_id, lawyer_id, status')
         .eq('id', caseId)
-        .or(`client_id.eq.${userId},lawyer_id.eq.${userId}`)
         .single()
 
-    if (error || !data) {
+    if (error || !data || (data.client_id !== userId && data.lawyer_id !== userId)) {
         throw new TRPCError({
             code: 'NOT_FOUND',
             message: 'Case not found or you do not have access',
@@ -29,7 +31,7 @@ async function verifyCaseAccess(
 
 /** Verify the current user has access to a document via its parent case. */
 async function verifyDocumentAccess(
-    supabase: any,
+    supabase: SupabaseClient,
     documentId: string,
     userId: string
 ) {
@@ -37,10 +39,15 @@ async function verifyDocumentAccess(
         .from('documents')
         .select('id, case_id, cases!inner( client_id, lawyer_id )')
         .eq('id', documentId)
-        .or(`cases.client_id.eq.${userId},cases.lawyer_id.eq.${userId}`)
         .single()
 
-    if (error || !data) {
+    const caseRelation = data?.cases
+    const caseRows = Array.isArray(caseRelation) ? caseRelation : caseRelation ? [caseRelation] : []
+    const hasAccess = caseRows.some(
+        (caseRow) => caseRow.client_id === userId || caseRow.lawyer_id === userId
+    )
+
+    if (error || !data || !hasAccess) {
         throw new TRPCError({
             code: 'NOT_FOUND',
             message: 'Document not found or you do not have access',
@@ -58,7 +65,7 @@ export const documentRouter = createTRPCRouter({
         .input(z.object({ caseId: z.string().uuid() }))
         .query(async ({ ctx, input }) => {
             // 1. Ownership check
-            await verifyCaseAccess(ctx.supabase, input.caseId, ctx.userId!)
+            await verifyCaseAccess(ctx.supabase, input.caseId, ctx.userId)
 
             // 2. Fetch documents
             const { data, error } = await ctx.supabase
@@ -91,103 +98,19 @@ export const documentRouter = createTRPCRouter({
             return data ?? []
         }),
 
-    /** Register a document upload (after client-side upload + blockchain anchor) */
-    registerUpload: protectedProcedure
-        .input(z.object({
-            caseId: z.uuid(),
-            fileName: z.string().min(1),
-            fileUrl: z.url(),
-            sha512Hash: z.string().length(128),
-            chainTxId: z.string().min(1),
-        }))
-        .mutation(async ({ ctx, input }) => {
-            // 1. Ownership check — also gives us case data for status check
-            const caseData = await verifyCaseAccess(ctx.supabase, input.caseId, ctx.userId!)
-
-            // 2. Cannot upload to a closed case
-            if (caseData.status === 'CLOSED') {
-                throw new TRPCError({
-                    code: 'BAD_REQUEST',
-                    message: 'Cannot upload documents to a closed case',
-                })
-            }
-
-            // 3. Insert document
-            const { data: document, error: documentError } = await ctx.supabase
-                .from('documents')
-                .insert({
-                    case_id: input.caseId,
-                    file_name: input.fileName,
-                    file_url: input.fileUrl,
-                    sha512_hash: input.sha512Hash,
-                    chain_tx_id: input.chainTxId,
-                    uploaded_by: ctx.userId,
-                })
-                .select()
-                .single()
-
-            if (documentError || !document) {
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Failed to register document upload',
-                })
-            }
-
-            // 4. Notify the OTHER party on the case
-            const recipientId = ctx.userId === caseData.client_id
-                ? caseData.lawyer_id
-                : caseData.client_id
-
-            await ctx.supabase
-                .from('notifications')
-                .insert({
-                    user_id: recipientId,
-                    type: 'DOCUMENT_UPLOADED',
-                    title: 'New document uploaded',
-                    body: `A new document "${input.fileName}" has been uploaded to your case.`,
-                    case_id: input.caseId,
-                })
-
-            return document
-        }),
-
     /** Soft-delete a document (only the uploader can delete) */
     deleteDocument: protectedProcedure
         .input(z.object({ documentId: z.uuid() }))
         .mutation(async ({ ctx, input }) => {
-            // 1. Fetch the document and verify ownership via case
-            const { data: doc, error: docError } = await ctx.supabase
-                .from('documents')
-                .select('id, case_id, uploaded_by')
-                .eq('id', input.documentId)
-                .is('deleted_at', null)
-                .single()
-
-            if (docError || !doc) {
-                throw new TRPCError({
-                    code: 'NOT_FOUND',
-                    message: 'Document not found',
-                })
-            }
-
-            // 2. Only the uploader can delete
-            if (doc.uploaded_by !== ctx.userId) {
-                throw new TRPCError({
-                    code: 'FORBIDDEN',
-                    message: 'Only the uploader can delete this document',
-                })
-            }
-
-            // 3. Soft delete
-            const { error } = await ctx.supabase
-                .from('documents')
-                .update({ deleted_at: new Date().toISOString() })
-                .eq('id', input.documentId)
+            const { error } = await ctx.supabase.rpc('soft_delete_case_document', {
+                p_document_id: input.documentId,
+                p_deleted_by: ctx.userId,
+            })
 
             if (error) {
                 throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Failed to delete document',
+                    code: error.message.includes('not found') ? 'NOT_FOUND' : 'BAD_REQUEST',
+                    message: error.message,
                 })
             }
 
@@ -199,7 +122,7 @@ export const documentRouter = createTRPCRouter({
         .input(z.object({ documentId: z.uuid() }))
         .query(async ({ ctx, input }) => {
             // 1. Verify access via document → case ownership
-            await verifyDocumentAccess(ctx.supabase, input.documentId, ctx.userId!)
+            await verifyDocumentAccess(ctx.supabase, input.documentId, ctx.userId)
 
             // 2. Fetch access log
             const { data, error } = await ctx.supabase
@@ -222,5 +145,50 @@ export const documentRouter = createTRPCRouter({
             }
 
             return data ?? []
+        }),
+
+    /** Retry a document whose initial blockchain anchor failed. */
+    retryBlockchainAnchor: protectedProcedure
+        .input(z.object({ documentId: z.uuid() }))
+        .mutation(async ({ ctx, input }) => {
+            const rateLimit = await checkRateLimit('upload', ctx.userId)
+            if (!rateLimit.success) {
+                throw new TRPCError({
+                    code: 'TOO_MANY_REQUESTS',
+                    message: 'Too many anchoring attempts. Please wait and try again.',
+                })
+            }
+
+            await verifyDocumentAccess(ctx.supabase, input.documentId, ctx.userId)
+
+            const { data: document, error: documentError } = await ctx.supabase
+                .from('documents')
+                .select('id, sha512_hash, chain_tx_id')
+                .eq('id', input.documentId)
+                .is('deleted_at', null)
+                .single()
+
+            if (documentError || !document) {
+                throw new TRPCError({ code: 'NOT_FOUND', message: 'Document not found' })
+            }
+            if (document.chain_tx_id !== 'pending') {
+                return { chainTxId: document.chain_tx_id, alreadyAnchored: true }
+            }
+
+            const chainTxId = await anchorHashOnChain(document.id, document.sha512_hash)
+            const { error: updateError } = await ctx.supabase
+                .from('documents')
+                .update({ chain_tx_id: chainTxId })
+                .eq('id', document.id)
+                .eq('chain_tx_id', 'pending')
+
+            if (updateError) {
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'The hash was anchored but local reconciliation failed.',
+                })
+            }
+
+            return { chainTxId, alreadyAnchored: false }
         }),
 })

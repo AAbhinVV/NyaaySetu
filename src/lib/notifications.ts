@@ -17,18 +17,29 @@ function getResendClient(): Resend {
 
 const FROM_ADDRESS = 'NyaaySetu <noreply@nyaaysetu.com>'
 
+function escapeHtml(value: string) {
+    return value.replace(/[&<>"']/g, (character) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+    })[character] ?? character)
+}
+
 // ─── Email Functions ──────────────────────────────────────────────────────────
 
 /** Notify lawyer of a new connection request */
 export async function sendConnectionRequestEmail(to: string, clientName: string) {
     const resend = getResendClient()
+    const safeClientName = escapeHtml(clientName)
     return resend.emails.send({
         from: FROM_ADDRESS,
         to,
         subject: 'New Connection Request — NyaaySetu',
         html: `
             <h2>You have a new client connection request</h2>
-            <p><strong>${clientName}</strong> has paid the connection fee and wants to connect with you.</p>
+            <p><strong>${safeClientName}</strong> has paid the connection fee and wants to connect with you.</p>
             <p>Log in to your dashboard to accept or decline.</p>
         `,
     })
@@ -37,13 +48,14 @@ export async function sendConnectionRequestEmail(to: string, clientName: string)
 /** Notify client their connection was accepted */
 export async function sendConnectionAcceptedEmail(to: string, lawyerName: string) {
     const resend = getResendClient()
+    const safeLawyerName = escapeHtml(lawyerName)
     return resend.emails.send({
         from: FROM_ADDRESS,
         to,
         subject: 'Your Lawyer Accepted Your Request — NyaaySetu',
         html: `
             <h2>Your connection has been accepted</h2>
-            <p><strong>${lawyerName}</strong> has accepted your request. Your case has been created.</p>
+            <p><strong>${safeLawyerName}</strong> has accepted your request. Your case has been created.</p>
             <p>Visit your dashboard to view case details.</p>
         `,
     })
@@ -57,16 +69,19 @@ export async function sendHearingReminderEmail(
     courtName: string
 ) {
     const resend = getResendClient()
+    const safeCaseTitle = escapeHtml(caseTitle)
+    const safeHearingDate = escapeHtml(hearingDate)
+    const safeCourtName = escapeHtml(courtName)
     return resend.emails.send({
         from: FROM_ADDRESS,
         to,
-        subject: `Hearing Reminder: ${caseTitle} — NyaaySetu`,
+        subject: `Hearing Reminder: ${caseTitle.replace(/[\r\n]/g, ' ')} — NyaaySetu`,
         html: `
             <h2>Upcoming Hearing Reminder</h2>
-            <p>Your case <strong>${caseTitle}</strong> has a hearing scheduled:</p>
+            <p>Your case <strong>${safeCaseTitle}</strong> has a hearing scheduled:</p>
             <ul>
-                <li><strong>Date:</strong> ${hearingDate}</li>
-                <li><strong>Court:</strong> ${courtName}</li>
+                <li><strong>Date:</strong> ${safeHearingDate}</li>
+                <li><strong>Court:</strong> ${safeCourtName}</li>
             </ul>
             <p>Please plan accordingly.</p>
         `,
@@ -81,6 +96,7 @@ export async function sendVerificationEmail(
 ) {
     const resend = getResendClient()
     const isVerified = status === 'VERIFIED'
+    const safeReason = escapeHtml(reason ?? 'Please contact support for more details.')
 
     return resend.emails.send({
         from: FROM_ADDRESS,
@@ -95,7 +111,7 @@ export async function sendVerificationEmail(
             `
             : `
                 <h2>Your profile verification was not approved</h2>
-                <p>Reason: ${reason ?? 'Please contact support for more details.'}</p>
+                <p>Reason: ${safeReason}</p>
                 <p>You can update your profile and resubmit for verification.</p>
             `,
     })

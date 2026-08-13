@@ -3,6 +3,7 @@
 import Link from "next/link"
 import { useUser } from "@clerk/nextjs"
 import { trpc } from "@/lib/trpc/client"
+import { firstRelation } from '@/lib/utils'
 
 function StatCard({ value, label, color, sub }: { value: number | string; label: string; color: string; sub?: string }) {
     return (
@@ -39,7 +40,7 @@ export default function LawyerDashboardPage() {
     // Fetch data from multiple routers
     const profile = trpc.lawyer.getMyProfile.useQuery()
     const cases = trpc.case.getAllCases.useQuery({ page: 1, limit: 5 })
-    const pendingReqs = trpc.connection.getIncomingRequests.useQuery({ status: "PENDING" as any, page: 1, limit: 5 })
+    const pendingReqs = trpc.connection.getIncomingRequests.useQuery({ status: "PENDING", page: 1, limit: 5 })
     const connections = trpc.connection.getMyConnections.useQuery({ page: 1, limit: 100 })
     const unread = trpc.notification.getUnreadCount.useQuery()
 
@@ -114,13 +115,13 @@ export default function LawyerDashboardPage() {
                         </div>
                     ) : (
                         <div className="bg-card rounded-xl shadow-lawyer overflow-hidden">
-                            {caseList.map((c: any, i: number) => (
+                            {caseList.map((c, i) => (
                                 <Link key={c.id} href={`/dashboard/lawyer/cases/${c.id}`}
                                     className={`flex items-center gap-5 px-5 py-4 hover:bg-muted transition-colors no-underline text-inherit ${i > 0 ? "border-t border-border" : ""}`}>
                                     <div className="flex-1 min-w-0">
                                         <h3 className="font-body text-[0.9375rem] font-semibold text-foreground truncate">{c.title || "Untitled Case"}</h3>
                                         <p className="font-body text-xs text-muted-foreground mt-0.5">
-                                            {c.category || "General"} • {c.users?.full_name ?? "Client"}
+                                            {c.category || "General"} • {firstRelation(c.users)?.full_name ?? "Client"}
                                             {c.next_hearing_at && ` • Hearing ${new Date(c.next_hearing_at).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}`}
                                         </p>
                                     </div>
@@ -147,12 +148,12 @@ export default function LawyerDashboardPage() {
                         </div>
                     ) : (
                         <div className="flex flex-col gap-3">
-                            {requests.map((req: any) => (
+                            {requests.map((req) => (
                                 <div key={req.id} className="bg-card rounded-xl p-4 shadow-lawyer">
                                     <div className="flex items-start justify-between gap-3 mb-3">
                                         <div>
-                                            <p className="font-body text-sm font-semibold text-foreground">{req.users?.full_name ?? "Client"}</p>
-                                            <p className="font-body text-xs text-muted-foreground mt-0.5">{req.users?.email}</p>
+                                            <p className="font-body text-sm font-semibold text-foreground">{firstRelation(req.users)?.full_name ?? "Client"}</p>
+                                            <p className="font-body text-xs text-muted-foreground mt-0.5">{firstRelation(req.users)?.email}</p>
                                         </div>
                                         <span className="font-body text-[0.625rem] text-muted-foreground/60 whitespace-nowrap">
                                             {new Date(req.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric" })}

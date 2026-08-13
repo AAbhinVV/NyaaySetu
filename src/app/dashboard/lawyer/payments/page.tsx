@@ -1,6 +1,7 @@
 "use client"
 
 import { trpc } from "@/lib/trpc/client"
+import { firstRelation } from '@/lib/utils'
 
 export default function LawyerPaymentsPage() {
     const connections = trpc.connection.getMyConnections.useQuery({ page: 1, limit: 100 })
@@ -9,7 +10,7 @@ export default function LawyerPaymentsPage() {
     const allRequests = incoming.data?.connections ?? []
 
     const totalEarned = connList.length * 499
-    const pendingPayments = allRequests.filter((c: any) => c.status === "PENDING").length
+    const pendingPayments = allRequests.filter((c) => c.status === "PENDING").length
 
     return (
         <div className="max-w-[960px]">
@@ -46,14 +47,14 @@ export default function LawyerPaymentsPage() {
                     </div>
                 ) : (
                     <div className="bg-card rounded-xl shadow-lawyer overflow-hidden">
-                        {connList.map((conn: any, i: number) => (
+                        {connList.map((conn, i) => (
                             <div key={conn.id} className={`flex max-md:flex-wrap items-center gap-5 px-6 py-4 ${i > 0 ? "border-t border-border" : ""}`}>
                                 <div className="w-10 h-10 rounded-full bg-emerald/[0.08] flex items-center justify-center shrink-0">
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2E7D5E" strokeWidth="1.5"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <p className="font-body text-[0.9375rem] font-semibold text-foreground truncate">
-                                        Connection Fee — {conn.users?.full_name ?? "Client"}
+                                        Connection Fee — {firstRelation(conn.users)?.full_name ?? "Client"}
                                     </p>
                                     <p className="font-body text-xs text-muted-foreground mt-0.5">
                                         {new Date(conn.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}

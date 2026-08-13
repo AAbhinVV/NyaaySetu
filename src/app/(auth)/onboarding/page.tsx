@@ -55,7 +55,7 @@ type Step = "role" | "details"
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function OnboardingPage() {
-    const { user, isLoaded } = useUser()
+    const { isLoaded } = useUser()
     const { session } = useSession()
     const router = useRouter()
 
@@ -149,16 +149,10 @@ export default function OnboardingPage() {
                 throw new Error("Please accept the Terms, Privacy Policy, and Legal Disclaimer")
             }
 
-            // 1. Set role in Clerk metadata (client-side can only write unsafeMetadata;
-            //    the Clerk webhook should copy this to publicMetadata for production)
-            await user?.update({
-                unsafeMetadata: { role: "CLIENT" },
-            })
-
-            // 2. Upsert user profile in Supabase via tRPC
+            // Save the profile first. The server derives the email from Clerk and
+            // writes server-controlled role metadata only after validation.
             await completeOnboarding.mutateAsync({
                 fullName: clientForm.fullName.trim(),
-                email: user?.primaryEmailAddress?.emailAddress ?? "",
                 phone: clientForm.phone,
                 city: clientForm.city.trim(),
                 state: clientForm.state,
@@ -217,15 +211,9 @@ export default function OnboardingPage() {
                 throw new Error("Please confirm the lawyer declaration and verification policy")
             }
 
-            // 1. Set role in Clerk metadata
-            await user?.update({
-                unsafeMetadata: { role: "LAWYER" },
-            })
-
-            // 2. Upsert base user profile
+            // Save the base profile using the server-authoritative role.
             await completeOnboarding.mutateAsync({
                 fullName: lawyerForm.fullName.trim(),
-                email: user?.primaryEmailAddress?.emailAddress ?? "",
                 phone: lawyerForm.phone,
                 city: lawyerForm.city.trim(),
                 state: lawyerForm.state,

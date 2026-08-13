@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { trpc } from "@/lib/trpc/client"
+import { firstRelation } from '@/lib/utils'
 
 export default function LawyerDetailPage() {
     const { lawyerId } = useParams<{ lawyerId: string }>()
@@ -103,11 +104,11 @@ export default function LawyerDetailPage() {
                     <div className="text-center py-12 bg-card rounded-xl shadow-lawyer"><p className="font-body text-sm text-muted-foreground">No reviews yet.</p></div>
                 ) : (
                     <div className="bg-card rounded-xl shadow-lawyer overflow-hidden">
-                        {reviewList.map((r: any, i: number) => (
+                        {reviewList.map((r, i) => (
                             <div key={r.id} className={`px-6 py-5 ${i > 0 ? "border-t border-border" : ""}`}>
                                 <div className="flex items-baseline justify-between gap-4 mb-1">
                                     <div className="flex items-center gap-2">
-                                        <span className="font-body text-sm font-semibold text-foreground">{r.users?.full_name ?? "Client"}</span>
+                                        <span className="font-body text-sm font-semibold text-foreground">{firstRelation(r.users)?.full_name ?? "Client"}</span>
                                         <span className={`font-body text-[0.625rem] font-semibold px-1.5 py-0.5 rounded ${r.outcome === "WON" ? "bg-emerald/10 text-emerald" : r.outcome === "SETTLED" ? "bg-gold/10 text-[#96790C]" : "bg-destructive/10 text-destructive"}`}>{r.outcome}</span>
                                     </div>
                                     <span className="font-body text-[0.6875rem] text-muted-foreground/60">{new Date(r.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}</span>

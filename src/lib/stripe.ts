@@ -28,6 +28,7 @@ export async function createStripeCheckoutSession(options: {
     successUrl: string
     cancelUrl: string
     metadata?: Record<string, string>
+    idempotencyKey?: string
 }) {
     const stripe = getStripeInstance()
 
@@ -51,7 +52,7 @@ export async function createStripeCheckoutSession(options: {
         success_url: options.successUrl,
         cancel_url: options.cancelUrl,
         metadata: options.metadata ?? {},
-    })
+    }, options.idempotencyKey ? { idempotencyKey: options.idempotencyKey } : undefined)
 
     return session
 }
@@ -85,4 +86,19 @@ export async function retrieveStripeSession(sessionId: string) {
     return stripe.checkout.sessions.retrieve(sessionId, {
         expand: ['payment_intent'],
     })
+}
+
+/** Expire a Checkout Session that cannot be safely associated with local state. */
+export async function expireStripeSession(sessionId: string) {
+    const stripe = getStripeInstance()
+    return stripe.checkout.sessions.expire(sessionId)
+}
+
+/** Refund a captured connection payment. */
+export async function refundStripePayment(paymentIntentId: string) {
+    const stripe = getStripeInstance()
+    return stripe.refunds.create(
+        { payment_intent: paymentIntentId },
+        { idempotencyKey: `nyaaysetu-refund-${paymentIntentId}` }
+    )
 }

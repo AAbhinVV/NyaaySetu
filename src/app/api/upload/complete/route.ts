@@ -2,6 +2,31 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@clerk/nextjs/server"
 import { createServiceRoleClient } from "@/lib/supabase/server"
 import { computeSHA512, anchorHashOnChain } from "@/lib/blockchain"
+import { checkRateLimit } from '@/lib/ratelimit'
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const ALLOWED_TYPES = new Set([
+    'application/pdf',
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'text/plain',
+])
+
+function hasExpectedSignature(type: string, buffer: Buffer) {
+    if (type === 'application/pdf') return buffer.subarray(0, 5).toString() === '%PDF-'
+    if (type === 'image/jpeg') return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff
+    if (type === 'image/png') return buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+    if (type === 'image/webp') return buffer.subarray(0, 4).toString() === 'RIFF' && buffer.subarray(8, 12).toString() === 'WEBP'
+    if (type === 'application/msword') return buffer.subarray(0, 8).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]))
+    if (type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+        return buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))
+    }
+    if (type === 'text/plain') return !buffer.subarray(0, 1024).includes(0)
+    return false
+}
 
 /**
  * POST /api/upload/complete
@@ -22,12 +47,17 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
         }
 
+        const rateLimit = await checkRateLimit('upload', userId)
+        if (!rateLimit.success) {
+            return NextResponse.json({ error: 'Too many uploads. Please wait and try again.' }, { status: 429 })
+        }
+
         // 2. Parse form data
         const formData = await req.formData()
         const file = formData.get("file") as File | null
         const caseId = formData.get("caseId") as string | null
 
-        if (!file || !caseId) {
+        if (!file || !caseId || !UUID_PATTERN.test(caseId)) {
             return NextResponse.json(
                 { error: "Missing required fields: file, caseId" },
                 { status: 400 }
@@ -36,7 +66,7 @@ export async function POST(req: NextRequest) {
 
         // 3. Validate file size (max 10MB)
         const MAX_SIZE = 10 * 1024 * 1024
-        if (file.size > MAX_SIZE) {
+        if (file.size === 0 || file.size > MAX_SIZE) {
             return NextResponse.json(
                 { error: "File too large. Maximum size is 10MB." },
                 { status: 413 }
@@ -46,6 +76,13 @@ export async function POST(req: NextRequest) {
         // 4. Read file buffer
         const arrayBuffer = await file.arrayBuffer()
         const buffer = Buffer.from(arrayBuffer)
+
+        if (!ALLOWED_TYPES.has(file.type) || !hasExpectedSignature(file.type, buffer)) {
+            return NextResponse.json(
+                { error: 'Unsupported file type or invalid file contents.' },
+                { status: 400 }
+            )
+        }
 
         // 5. Verify user has access to this case
         const supabase = createServiceRoleClient()
@@ -86,7 +123,7 @@ export async function POST(req: NextRequest) {
 
         // 7. Upload to Supabase Storage
         const timestamp = Date.now()
-        const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_")
+        const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 180) || 'document'
         const storagePath = `cases/${caseId}/${timestamp}_${sanitizedName}`
 
         const { error: uploadError } = await supabase.storage
@@ -121,6 +158,7 @@ export async function POST(req: NextRequest) {
 
         if (docError) {
             console.error("Document DB insert failed:", docError)
+            await supabase.storage.from('documents').remove([storagePath])
             return NextResponse.json(
                 { error: "Failed to register document" },
                 { status: 500 }

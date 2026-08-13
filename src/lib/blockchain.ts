@@ -6,21 +6,27 @@ import { ethers } from 'ethers'
 // are not set (e.g., during tests or in environments that don't use blockchain)
 
 let _provider: ethers.JsonRpcProvider | null = null
-let _signer: ethers.Wallet | null = null
+let _signer: ethers.NonceManager | null = null
 let _contract: ethers.Contract | null = null
 
 function getBlockchainConfig() {
     const polygonUrl = process.env.POLYGON_RPC_URL
     const privateKey = process.env.BLOCKCHAIN_PRIVATE_KEY
     const contractAddress = process.env.CONTRACT_ADDRESS
+    const chainId = process.env.POLYGON_CHAIN_ID
 
-    if (!polygonUrl || !privateKey || !contractAddress) {
+    if (!polygonUrl || !privateKey || !contractAddress || !chainId) {
         throw new Error(
-            'Missing blockchain environment variables: POLYGON_RPC_URL, BLOCKCHAIN_PRIVATE_KEY, CONTRACT_ADDRESS'
+            'Missing blockchain environment variables: POLYGON_RPC_URL, POLYGON_CHAIN_ID, BLOCKCHAIN_PRIVATE_KEY, CONTRACT_ADDRESS'
         )
     }
 
-    return { polygonUrl, privateKey, contractAddress }
+    const parsedChainId = Number(chainId)
+    if (!Number.isSafeInteger(parsedChainId) || parsedChainId <= 0) {
+        throw new Error('POLYGON_CHAIN_ID must be a positive integer')
+    }
+
+    return { polygonUrl, privateKey, contractAddress, chainId: parsedChainId }
 }
 
 // Minimal ABI — only the functions we use
@@ -37,12 +43,20 @@ function getProvider(): ethers.JsonRpcProvider {
     return _provider
 }
 
-function getSigner(): ethers.Wallet {
+function getSigner(): ethers.NonceManager {
     if (!_signer) {
         const { privateKey } = getBlockchainConfig()
-        _signer = new ethers.Wallet(privateKey, getProvider())
+        _signer = new ethers.NonceManager(new ethers.Wallet(privateKey, getProvider()))
     }
     return _signer
+}
+
+async function assertConfiguredNetwork(): Promise<void> {
+    const { chainId } = getBlockchainConfig()
+    const network = await getProvider().getNetwork()
+    if (network.chainId !== BigInt(chainId)) {
+        throw new Error(`Blockchain network mismatch: expected chain ${chainId}, received ${network.chainId}`)
+    }
 }
 
 function getContract(): ethers.Contract {
@@ -68,6 +82,7 @@ export async function anchorHashOnChain(
     sha512Hash: string
 ): Promise<string> {
     try {
+        await assertConfiguredNetwork()
         const contract = getContract()
         const hashBytes = ethers.hexlify(Buffer.from(sha512Hash, 'hex'))
 
@@ -87,6 +102,7 @@ export async function verifyHashOnChain(
     sha512Hash: string
 ): Promise<boolean> {
     try {
+        await assertConfiguredNetwork()
         const contract = getContract()
         const hashBytes = ethers.hexlify(Buffer.from(sha512Hash, 'hex'))
 

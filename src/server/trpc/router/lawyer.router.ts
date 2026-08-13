@@ -158,7 +158,7 @@ export const lawyerRouter = createTRPCRouter({
     // ── Public: search lawyers ─────────────────────────────────────────────────
     search: baseProcedure
         .input(searchSchema)
-        .query(async ({ ctx, input }) => {
+        .query(async ({ input }) => {
             const {
                 query,
                 category,
@@ -168,7 +168,6 @@ export const lawyerRouter = createTRPCRouter({
                 minRating,
                 maxFee,
                 minExperience,
-                verifiedOnly,
                 sortBy,
                 sortOrder,
                 page,
@@ -177,7 +176,8 @@ export const lawyerRouter = createTRPCRouter({
 
             const offset = (page - 1) * limit
 
-            let dbQuery = ctx.supabase
+            const publicDb = createServiceRoleClient()
+            let dbQuery = publicDb
                 .from('lawyers')
                 .select(
                     `
@@ -197,19 +197,19 @@ export const lawyerRouter = createTRPCRouter({
           review_count,
           verified,
           languages_spoken,
-          created_at,
-          users!inner ( email )
+          created_at
         `,
                     { count: 'exact' }
                 )
 
-            if (verifiedOnly) {
-                dbQuery = dbQuery.eq('verified', true)
-            }
+            // Public search never exposes pending or rejected lawyer profiles,
+            // regardless of caller-supplied input.
+            dbQuery = dbQuery.eq('verified', true)
 
             if (query) {
+                const safeQuery = query.replace(/[,%()]/g, ' ').trim()
                 dbQuery = dbQuery.or(
-                    `full_name.ilike.%${query}%,bio.ilike.%${query}%`
+                    `full_name.ilike.%${safeQuery}%,bio.ilike.%${safeQuery}%`
                 )
             }
 
@@ -272,21 +272,29 @@ export const lawyerRouter = createTRPCRouter({
     // ── Public: get lawyer by ID (full profile) ────────────────────────────────
     getById: baseProcedure
         .input(z.object({ id: z.string().uuid() }))
-        .query(async ({ ctx, input }) => {
-            const { data, error } = await ctx.supabase
+        .query(async ({ input }) => {
+            const publicDb = createServiceRoleClient()
+            const { data, error } = await publicDb
                 .from('lawyers')
                 .select(
                     `
-          *,
-          users!inner ( email, created_at ),
-          reviews (
-            id,
-            rating,
-            outcome,
-            body,
-            created_at,
-            users!reviewer_id ( full_name )
-          )
+          id,
+          user_id,
+          full_name,
+          bio,
+          city,
+          state,
+          specializations,
+          court_levels,
+          fee_per_consultation,
+          years_of_experience,
+          win_rate,
+          total_cases,
+          avg_rating,
+          review_count,
+          verified,
+          languages_spoken,
+          created_at
         `
                 )
                 .eq('id', input.id)
@@ -312,10 +320,11 @@ export const lawyerRouter = createTRPCRouter({
                 limit: z.number().min(1).max(20).default(10),
             })
         )
-        .query(async ({ ctx, input }) => {
+        .query(async ({ input }) => {
             const offset = (input.page - 1) * input.limit
+            const publicDb = createServiceRoleClient()
 
-            const { data, error, count } = await ctx.supabase
+            const { data, error, count } = await publicDb
                 .from('reviews')
                 .select(
                     `
@@ -395,8 +404,25 @@ export const lawyerRouter = createTRPCRouter({
     createProfile: lawyerProcedure
         .input(createProfileSchema)
         .mutation(async ({ ctx, input }) => {
+            // Clerk handles authentication for this app, so this onboarding
+            // mutation uses a server-only client after lawyerProcedure has
+            // verified the Clerk-backed database user and LAWYER role.
+            const { createServiceRoleClient } = await import('@/lib/supabase/server')
+            const serviceSupabase = createServiceRoleClient()
+            const expectedProofPrefix = `lawyer-verification/${ctx.userId}/`
+
+            if (
+                !input.verificationDocumentUrl.startsWith(expectedProofPrefix) ||
+                input.verificationDocumentUrl.includes('..')
+            ) {
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message: 'Invalid verification document',
+                })
+            }
+
             // Check profile doesn't already exist
-            const { data: existing } = await ctx.supabase
+            const { data: existing } = await serviceSupabase
                 .from('lawyers')
                 .select('id')
                 .eq('user_id', ctx.userId)
@@ -410,7 +436,7 @@ export const lawyerRouter = createTRPCRouter({
             }
 
             // Check Bar Council ID uniqueness
-            const { data: duplicateBar } = await ctx.supabase
+            const { data: duplicateBar } = await serviceSupabase
                 .from('lawyers')
                 .select('id')
                 .eq('bar_council_id', input.barCouncilId)
@@ -423,7 +449,7 @@ export const lawyerRouter = createTRPCRouter({
                 })
             }
 
-            const { data, error } = await ctx.supabase
+            const { data, error } = await serviceSupabase
                 .from('lawyers')
                 .insert({
                     user_id: ctx.userId,
@@ -507,13 +533,22 @@ export const lawyerRouter = createTRPCRouter({
             z.object({
                 lawyerId: z.string().uuid(),
                 status: VerificationStatus,
-                rejectionReason: z.string().optional(),
+                rejectionReason: z.string().trim().min(5).max(500).optional(),
+            })
+            .superRefine((value, issue) => {
+                if (value.status === 'REJECTED' && !value.rejectionReason) {
+                    issue.addIssue({
+                        code: 'custom',
+                        path: ['rejectionReason'],
+                        message: 'A rejection reason is required.',
+                    })
+                }
             })
         )
         .mutation(async ({ ctx, input }) => {
             const { data: lawyer, error: fetchError } = await ctx.supabase
                 .from('lawyers')
-                .select('id, user_id, full_name, verification_status')
+                .select('id, user_id, full_name, verification_status, verification_document_url')
                 .eq('id', input.lawyerId)
                 .single()
 
@@ -521,6 +556,13 @@ export const lawyerRouter = createTRPCRouter({
                 throw new TRPCError({
                     code: 'NOT_FOUND',
                     message: 'Lawyer not found',
+                })
+            }
+
+            if (input.status === 'VERIFIED' && !lawyer.verification_document_url) {
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message: 'A verification document is required before approval.',
                 })
             }
 

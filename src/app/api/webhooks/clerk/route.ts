@@ -138,21 +138,57 @@ export async function POST(req: NextRequest) {
                     )
                 }
 
-                // CASCADE on users.id handles lawyers, connections, cases, etc.
-                const { error } = await supabase
+                // Legal case, payment, audit, and document records must survive
+                // identity-provider account deletion. Anonymize and suspend the
+                // identity row instead of triggering destructive FK cascades.
+                const deletedEmail = `deleted-${clerkUserId}@deleted.invalid`
+                const { data: deletedUser, error } = await supabase
                     .from("users")
-                    .delete()
+                    .update({
+                        full_name: "Deleted User",
+                        email: deletedEmail,
+                        phone: null,
+                        city: null,
+                        state: null,
+                        suspended: true,
+                        suspension_reason: "Clerk account deleted",
+                        suspended_at: new Date().toISOString(),
+                        deleted_at: new Date().toISOString(),
+                    })
                     .eq("clerk_user_id", clerkUserId)
+                    .select('id, role')
+                    .maybeSingle()
 
                 if (error) {
                     console.error("Failed to delete user:", error)
                     return NextResponse.json(
-                        { error: "Database delete failed" },
+                        { error: "Database anonymization failed" },
                         { status: 500 }
                     )
                 }
 
-                console.log("User deleted from Supabase:", clerkUserId)
+                if (deletedUser?.role === 'LAWYER') {
+                    const { error: lawyerError } = await supabase
+                        .from('lawyers')
+                        .update({
+                            full_name: 'Former Advocate',
+                            bio: null,
+                            phone: null,
+                            verified: false,
+                            verification_status: 'REJECTED',
+                            rejection_reason: 'Account deleted',
+                        })
+                        .eq('user_id', deletedUser.id)
+
+                    if (lawyerError) {
+                        return NextResponse.json(
+                            { error: 'Lawyer anonymization failed' },
+                            { status: 500 }
+                        )
+                    }
+                }
+
+                console.log("User anonymized in Supabase:", clerkUserId)
                 break
             }
 

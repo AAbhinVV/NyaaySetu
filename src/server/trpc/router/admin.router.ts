@@ -218,8 +218,13 @@ export const adminRouter = createTRPCRouter({
             // Sync suspension to Clerk
             try {
                 const clerk = await clerkClient()
-                await clerk.users.updateUser(userData.clerk_user_id, {
-                    publicMetadata: { suspended: true, suspensionReason: reason },
+                const clerkUser = await clerk.users.getUser(userData.clerk_user_id)
+                await clerk.users.updateUserMetadata(userData.clerk_user_id, {
+                    publicMetadata: {
+                        ...clerkUser.publicMetadata,
+                        suspended: true,
+                        suspensionReason: reason,
+                    },
                 })
             } catch (err) {
                 console.error(
@@ -229,6 +234,56 @@ export const adminRouter = createTRPCRouter({
             }
 
             return { success: true }
+        }),
+
+    /** Refund a captured Stripe connection payment. */
+    refundPayment: adminProcedure
+        .input(z.object({
+            paymentId: z.uuid(),
+            reason: z.string().trim().min(5).max(500),
+        }))
+        .mutation(async ({ ctx, input }) => {
+            const { data: payment, error: paymentError } = await ctx.supabase
+                .from('payments')
+                .select('id, status, stripe_payment_intent_id, connection_id, client_id')
+                .eq('id', input.paymentId)
+                .single()
+
+            if (paymentError || !payment) {
+                throw new TRPCError({ code: 'NOT_FOUND', message: 'Payment not found' })
+            }
+            if (payment.status === 'REFUNDED') return { success: true, alreadyRefunded: true }
+            if (payment.status !== 'CAPTURED' || !payment.stripe_payment_intent_id) {
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message: 'Only captured Stripe payments can be refunded.',
+                })
+            }
+
+            await refundStripePayment(payment.stripe_payment_intent_id)
+
+            const { error: updateError } = await ctx.supabase
+                .from('payments')
+                .update({ status: 'REFUNDED' })
+                .eq('id', payment.id)
+                .eq('status', 'CAPTURED')
+
+            if (updateError) {
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Stripe refunded the payment, but local reconciliation is pending.',
+                })
+            }
+
+            await ctx.supabase.from('notifications').insert({
+                user_id: payment.client_id,
+                type: 'CONNECTION_DECLINED',
+                title: 'Your connection payment was refunded',
+                body: `Your payment was refunded. Reason: ${input.reason}`,
+                case_id: null,
+            })
+
+            return { success: true, alreadyRefunded: false }
         }),
 
     /** Hard-delete a review and recalculate the lawyer's rating */

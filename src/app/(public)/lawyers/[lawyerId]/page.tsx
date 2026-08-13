@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { trpc } from "@/lib/trpc/client"
+import { firstRelation } from '@/lib/utils'
 
 function StarRating({ rating, size = 14 }: { rating: number; size?: number }) {
     return (
@@ -134,7 +135,7 @@ export default function PublicLawyerProfilePage() {
                     </div>
                 ) : (
                     <div className="space-y-4">
-                        {reviewList.map((r: any) => (
+                        {reviewList.map((r) => (
                             <div key={r.id} className="bg-card rounded-xl shadow-sm p-5">
                                 <div className="flex items-center justify-between mb-2">
                                     <div className="flex items-center gap-3">
@@ -146,7 +147,7 @@ export default function PublicLawyerProfilePage() {
                                     <span className="font-body text-xs text-muted-foreground">{new Date(r.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" })}</span>
                                 </div>
                                 <p className="font-body text-sm text-foreground/80 leading-relaxed">{r.body}</p>
-                                <p className="font-body text-xs text-muted-foreground mt-2">— {r.users?.full_name ?? "Client"}</p>
+                                <p className="font-body text-xs text-muted-foreground mt-2">— {firstRelation(r.users)?.full_name ?? "Client"}</p>
                             </div>
                         ))}
                     </div>

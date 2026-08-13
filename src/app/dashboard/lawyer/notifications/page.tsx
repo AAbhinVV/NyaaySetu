@@ -60,7 +60,7 @@ export default function LawyerNotificationsPage() {
                 </div>
             ) : (
                 <div className="bg-card rounded-xl shadow-lawyer overflow-hidden">
-                    {notifList.map((n: any, i: number) => (
+                    {notifList.map((n, i) => (
                         <div key={n.id}
                             className={`flex items-start gap-4 px-6 py-4 transition-colors ${!n.read ? "bg-primary/[0.02]" : ""} ${i > 0 ? "border-t border-border" : ""}`}>
                             <span className="text-xl mt-0.5 shrink-0">{typeIcon(n.type)}</span>

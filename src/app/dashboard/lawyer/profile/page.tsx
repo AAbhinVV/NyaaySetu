@@ -7,11 +7,29 @@ const CASE_CATEGORIES = ["CIVIL","CRIMINAL","PROPERTY","FAMILY","DIGITAL_CRIME",
 const COURT_LEVELS = ["DISTRICT","HIGH_COURT","SUPREME_COURT","TRIBUNAL","CONSUMER_FORUM"] as const
 const LANGUAGES = ["Hindi","English","Bengali","Telugu","Marathi","Tamil","Gujarati","Urdu","Kannada","Malayalam","Odia","Punjabi"] as const
 
+type LawyerForm = {
+    fullName: string
+    bio: string
+    city: string
+    state: string
+    phone: string
+    specializations: Array<(typeof CASE_CATEGORIES)[number]>
+    courtLevels: Array<(typeof COURT_LEVELS)[number]>
+    yearsOfExperience: number
+    feePerConsultation: number
+    languagesSpoken: string[]
+}
+
+const EMPTY_FORM: LawyerForm = {
+    fullName: '', bio: '', city: '', state: '', phone: '', specializations: [],
+    courtLevels: [], yearsOfExperience: 0, feePerConsultation: 0, languagesSpoken: [],
+}
+
 export default function LawyerProfilePage() {
     const profile = trpc.lawyer.getMyProfile.useQuery()
     const updateProfile = trpc.lawyer.updateProfile.useMutation({ onSuccess: () => { profile.refetch(); setEditing(false) } })
     const [editing, setEditing] = useState(false)
-    const [form, setForm] = useState<Record<string, any>>({})
+    const [form, setForm] = useState<LawyerForm>(EMPTY_FORM)
 
     const p = profile.data
 
@@ -26,7 +44,7 @@ export default function LawyerProfilePage() {
         setEditing(true)
     }
 
-    const toggle = (arr: string[], item: string) => arr.includes(item) ? arr.filter(v => v !== item) : [...arr, item]
+    const toggle = <T extends string>(arr: T[], item: T): T[] => arr.includes(item) ? arr.filter(v => v !== item) : [...arr, item]
 
     const handleSave = () => {
         updateProfile.mutate({
@@ -82,7 +100,7 @@ export default function LawyerProfilePage() {
                 {editing ? (
                     <div className="space-y-4">
                         <div className="grid grid-cols-2 max-md:grid-cols-1 gap-4">
-                            {[{ l: "Full Name", k: "fullName" }, { l: "Phone", k: "phone" }, { l: "City", k: "city" }, { l: "State", k: "state" }].map(f => (
+                            {([{ l: "Full Name", k: "fullName" }, { l: "Phone", k: "phone" }, { l: "City", k: "city" }, { l: "State", k: "state" }] as const).map(f => (
                                 <div key={f.k}>
                                     <label className="font-body text-[0.6875rem] text-muted-foreground/60 uppercase tracking-wider block mb-1">{f.l}</label>
                                     <input value={form[f.k] ?? ""} onChange={e => setForm(prev => ({ ...prev, [f.k]: e.target.value }))}

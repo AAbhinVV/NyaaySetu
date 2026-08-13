@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { trpc } from "@/lib/trpc/client"
+import { firstRelation } from '@/lib/utils'
 
 type VerificationFilter = "PENDING" | "VERIFIED" | "REJECTED" | ""
 
@@ -17,7 +18,7 @@ export default function AdminUsersPage() {
     const [page, setPage] = useState(1)
 
     const { data, isLoading } = trpc.admin.getAllLawyers.useQuery({
-        verificationStatus: (filter || undefined) as any,
+        verificationStatus: filter || undefined,
         page,
         limit: 12,
     })
@@ -75,7 +76,7 @@ export default function AdminUsersPage() {
                     </div>
 
                     {/* Rows */}
-                    {lawyers.map((lawyer: any, i: number) => (
+                    {lawyers.map((lawyer, i) => (
                         <div key={lawyer.id} className={`flex max-md:flex-wrap items-center gap-4 px-6 py-4 hover:bg-muted/50 transition-colors ${i > 0 ? "border-t border-border" : ""}`}>
                             {/* Name + Email */}
                             <div className="flex items-center gap-3 flex-1 min-w-0">

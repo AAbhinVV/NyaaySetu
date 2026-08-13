@@ -1,54 +1,45 @@
 import { initTRPC, TRPCError } from '@trpc/server'
 import { auth } from '@clerk/nextjs/server'
-import { createServerClient } from '@/lib/supabase/server'
+import { createServerClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { cache } from 'react'
 import superjson from 'superjson'
 import { ZodError } from 'zod'
+import { checkRateLimit } from '@/lib/ratelimit'
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
 export const createTRPCContext = cache(async () => {
-    const { userId: clerkUserId, sessionClaims } = await auth()
+    const { userId: clerkUserId } = await auth()
     const supabase = await createServerClient()
 
     let dbUserId: string | null = null
     let dbRole: string | null = null
+    let suspended = false
+    let serviceSupabase: ReturnType<typeof createServiceRoleClient> | null = null
 
     if (clerkUserId) {
-        // Use service role client for the initial lookup to bypass RLS.
-        // (RLS needs app.user_id set, but we need the UUID first — chicken-and-egg)
-        const { createServiceRoleClient } = await import('@/lib/supabase/server')
-        const serviceSupabase = createServiceRoleClient()
+        serviceSupabase = createServiceRoleClient()
 
         const { data: userRow } = await serviceSupabase
             .from('users')
-            .select('id, role')
+            .select('id, role, suspended')
             .eq('clerk_user_id', clerkUserId)
             .maybeSingle()
 
         dbUserId = userRow?.id ?? null
         dbRole = userRow?.role ?? null
-
-        // Set user ID on the regular client so RLS policies work for all subsequent queries
-        if (dbUserId) {
-            await supabase.rpc('set_config', {
-                setting: 'app.user_id',
-                value: dbUserId,
-            })
-        }
+        suspended = userRow?.suspended ?? false
     }
-
-    // Role priority: JWT session claims > DB role > null
-    const claimsRole =
-        (sessionClaims?.metadata as { role?: string })?.role ??
-        (sessionClaims?.unsafeMetadata as { role?: string })?.role ??
-        null
 
     return {
         userId: dbUserId,
         clerkUserId,
-        role: claimsRole ?? dbRole,
+        // Database roles are authoritative. Clerk metadata is only a routing hint
+        // and must never be used to authorize an API operation.
+        role: dbRole,
+        suspended,
         supabase,
+        serviceSupabase,
     }
 })
 
@@ -83,27 +74,46 @@ export const createCallerFactory = t.createCallerFactory
 export const baseProcedure = t.procedure
 
 /** Requires authenticated user — narrows userId to non-null */
-export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
-    if (!ctx.userId) {
+export const protectedProcedure = t.procedure.use(async ({ ctx, next }) => {
+    if (!ctx.userId || !ctx.serviceSupabase) {
         throw new TRPCError({ code: 'UNAUTHORIZED' })
+    }
+    if (ctx.suspended) {
+        throw new TRPCError({
+            code: 'FORBIDDEN',
+            message: 'This account is suspended. Contact support for assistance.',
+        })
+    }
+    const rateLimit = await checkRateLimit('general', ctx.userId)
+    if (!rateLimit.success) {
+        throw new TRPCError({
+            code: 'TOO_MANY_REQUESTS',
+            message: 'Too many requests. Please try again shortly.',
+        })
     }
     return next({
         ctx: {
             ...ctx,
             userId: ctx.userId, // narrows from string | null → string
+            // All authenticated database access is server-to-server. Authorization
+            // is enforced by the procedures and their ownership checks; browser
+            // clients never receive the service-role key.
+            supabase: ctx.serviceSupabase,
+            serviceSupabase: ctx.serviceSupabase,
         },
     })
 })
 
 /** Requires Clerk auth but NOT a Supabase user row (for onboarding) */
 export const onboardingProcedure = t.procedure.use(({ ctx, next }) => {
-    if (!ctx.clerkUserId) {
+    if (!ctx.clerkUserId || !ctx.serviceSupabase) {
         throw new TRPCError({ code: 'UNAUTHORIZED' })
     }
     return next({
         ctx: {
             ...ctx,
             clerkUserId: ctx.clerkUserId, // narrows from string | null | undefined → string
+            serviceSupabase: ctx.serviceSupabase,
         },
     })
 })

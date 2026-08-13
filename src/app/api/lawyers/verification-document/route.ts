@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { createServiceRoleClient } from '@/lib/supabase/server'
+ fix/security-and-auth-audit
+import { checkRateLimit } from '@/lib/ratelimit'
+=======
+ main
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024
 const ALLOWED_TYPES = [
@@ -12,6 +16,18 @@ const ALLOWED_TYPES = [
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ]
 
+ fix/security-and-auth-audit
+function hasExpectedSignature(type: string, buffer: Buffer) {
+    if (type === 'application/pdf') return buffer.subarray(0, 5).toString() === '%PDF-'
+    if (type === 'image/jpeg') return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff
+    if (type === 'image/png') return buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+    if (type === 'image/webp') return buffer.subarray(0, 4).toString() === 'RIFF' && buffer.subarray(8, 12).toString() === 'WEBP'
+    if (type === 'application/msword') return buffer.subarray(0, 8).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]))
+    return buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))
+}
+
+=======
+ main
 export async function POST(req: NextRequest) {
     const { userId } = await auth()
 
@@ -19,6 +35,14 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+ fix/security-and-auth-audit
+    const rateLimit = await checkRateLimit('upload', userId)
+    if (!rateLimit.success) {
+        return NextResponse.json({ error: 'Too many uploads. Please wait and try again.' }, { status: 429 })
+    }
+
+=======
+ main
     const formData = await req.formData()
     const file = formData.get('file') as File | null
 
@@ -26,7 +50,11 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Verification document is required' }, { status: 400 })
     }
 
+ fix/security-and-auth-audit
+    if (file.size === 0 || file.size > MAX_FILE_SIZE) {
+=======
     if (file.size > MAX_FILE_SIZE) {
+ main
         return NextResponse.json({ error: 'File too large. Maximum size is 5MB.' }, { status: 413 })
     }
 
