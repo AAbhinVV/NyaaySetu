@@ -143,13 +143,18 @@ export async function POST(req: NextRequest) {
 
         // 8. Register document in DB. file_url intentionally stores a private
         // storage path; downloads must go through the authenticated download API.
-        const { data: document, error: docError } = await supabase.rpc('register_case_document', {
-            p_case_id: caseId,
-            p_uploaded_by: dbUser.id,
-            p_file_name: sanitizedName,
-            p_storage_path: storagePath,
-            p_sha512_hash: sha512Hash,
-        })
+        const { data: document, error: docError } = await supabase
+            .from("documents")
+            .insert({
+                case_id: caseId,
+                file_name: file.name,
+                file_url: storagePath,
+                sha512_hash: sha512Hash,
+                chain_tx_id: "pending",
+                uploaded_by: dbUser.id,
+            })
+            .select()
+            .single()
 
         if (docError) {
             console.error("Document DB insert failed:", docError)
@@ -176,6 +181,20 @@ export async function POST(req: NextRequest) {
         } catch (err) {
             console.error("Blockchain anchoring failed (document saved as pending):", err)
         }
+
+        // 11. Notify the other party
+        const recipientId =
+            dbUser.id === caseData.client_id
+                ? caseData.lawyer_id
+                : caseData.client_id
+
+        await supabase.from("notifications").insert({
+            user_id: recipientId,
+            type: "DOCUMENT_UPLOADED",
+            title: "New document uploaded",
+            body: `A new document "${file.name}" has been uploaded to your case.`,
+            case_id: caseId,
+        })
 
         return NextResponse.json({
             success: true,

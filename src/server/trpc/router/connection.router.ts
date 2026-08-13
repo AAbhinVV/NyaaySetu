@@ -1,12 +1,8 @@
 import { z } from "zod";
 import { createTRPCRouter, lawyerProcedure, protectedProcedure, clientProcedure } from "../init";
 import { TRPCError } from "@trpc/server";
-import {
-    createStripeCheckoutSession,
-    expireStripeSession,
-    retrieveStripeSession,
-} from "@/lib/stripe";
-import { checkRateLimit } from '@/lib/ratelimit'
+import { createCaseInternal } from "./case.router";
+import { createStripeCheckoutSession } from "@/lib/stripe";
 
 const connectionStatus = z.enum(['PENDING', 'ACTIVE', 'DECLINED'])
 const CONNECTION_FEE_PAISE = 49900
@@ -25,14 +21,6 @@ export const connectionRouter = createTRPCRouter({
             lawyerId: z.uuid(),
         }))
         .mutation(async ({ ctx, input }) => {
-            const rateLimit = await checkRateLimit('payment', ctx.userId)
-            if (!rateLimit.success) {
-                throw new TRPCError({
-                    code: 'TOO_MANY_REQUESTS',
-                    message: 'Too many payment attempts. Please wait and try again.',
-                })
-            }
-
             const { data: lawyer, error: lawyerError } = await ctx.supabase
                 .from('lawyers')
                 .select('id, user_id, full_name, verified')
@@ -139,19 +127,41 @@ export const connectionRouter = createTRPCRouter({
                 })
             }
 
-            const { data: pendingPayment, error: pendingError } = await ctx.supabase
+            const appUrl = getAppUrl()
+            const session = await createStripeCheckoutSession({
+                amount: CONNECTION_FEE_PAISE,
+                connectionId: connection.id,
+                successUrl: `${appUrl}/dashboard/client/lawyers/${input.lawyerId}?payment=success`,
+                cancelUrl: `${appUrl}/dashboard/client/lawyers/${input.lawyerId}?payment=cancelled`,
+                metadata: {
+                    connectionId: connection.id,
+                    clientId: ctx.userId,
+                    lawyerId: lawyer.user_id,
+                    lawyerProfileId: lawyer.id,
+                },
+            })
+
+            const { data: pendingPayment } = await ctx.supabase
                 .from('payments')
-                .select('id, stripe_session_id')
+                .select('id')
                 .eq('connection_id', connection.id)
                 .eq('status', 'PENDING')
                 .maybeSingle()
 
-            if (pendingError) {
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Failed to check the pending payment.',
-                })
+            const paymentPayload = {
+                connection_id: connection.id,
+                client_id: ctx.userId,
+                stripe_session_id: session.id,
+                stripe_payment_intent_id: null,
+                amount: CONNECTION_FEE_PAISE,
+                status: 'PENDING' as const,
             }
+
+            const paymentMutation = pendingPayment
+                ? ctx.supabase.from('payments').update(paymentPayload).eq('id', pendingPayment.id)
+                : ctx.supabase.from('payments').insert(paymentPayload)
+
+            const { error: paymentError } = await paymentMutation
 
             if (pendingPayment) {
                 try {
@@ -186,59 +196,6 @@ export const connectionRouter = createTRPCRouter({
                 .eq('connection_id', connection.id)
 
             if (attemptCountError) {
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Failed to initialize the payment attempt.',
-                })
-            }
-
-            const appUrl = getAppUrl()
-            const session = await createStripeCheckoutSession({
-                amount: CONNECTION_FEE_PAISE,
-                connectionId: connection.id,
-                successUrl: `${appUrl}/dashboard/client/lawyers/${input.lawyerId}?payment=success`,
-                cancelUrl: `${appUrl}/dashboard/client/lawyers/${input.lawyerId}?payment=cancelled`,
-                metadata: {
-                    connectionId: connection.id,
-                    clientId: ctx.userId,
-                    lawyerId: lawyer.user_id,
-                    lawyerProfileId: lawyer.id,
-                },
-                idempotencyKey: `connection:${connection.id}:attempt:${(attemptCount ?? 0) + 1}`,
-            })
-
-            const paymentPayload = {
-                connection_id: connection.id,
-                client_id: ctx.userId,
-                stripe_session_id: session.id,
-                stripe_payment_intent_id: null,
-                amount: CONNECTION_FEE_PAISE,
-                status: 'PENDING' as const,
-            }
-
-            const { error: paymentError } = await ctx.supabase
-                .from('payments')
-                .insert(paymentPayload)
-
-            if (paymentError) {
-                if (paymentError.code === '23505' && session.url) {
-                    const { data: concurrentPayment } = await ctx.supabase
-                        .from('payments')
-                        .select('id')
-                        .eq('stripe_session_id', session.id)
-                        .maybeSingle()
-
-                    if (concurrentPayment) {
-                        return { checkoutUrl: session.url, sessionId: session.id }
-                    }
-                }
-
-                try {
-                    await expireStripeSession(session.id)
-                } catch {
-                    // Stripe may already have expired the session; the important
-                    // invariant is that it is never returned to the client.
-                }
                 throw new TRPCError({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: 'Failed to initialize payment',
@@ -284,6 +241,28 @@ export const connectionRouter = createTRPCRouter({
                 .eq('connection_id', connection.id)
                 .eq('status', 'CAPTURED')
                 .maybeSingle()
+
+            if (paymentError) {
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to verify payment',
+                })
+            }
+
+            if (!payment) {
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message: 'Cannot accept this request until payment is verified',
+                })
+            }
+
+            // 3. Update connection to ACTIVE
+            const { data: updatedConnection, error: updateError } = await ctx.supabase
+                .from('connections')
+                .update({ status: 'ACTIVE', accepted_at: new Date().toISOString() })
+                .eq('id', input.connectionId)
+                .select()
+                .single()
 
             if (paymentError) {
                 throw new TRPCError({

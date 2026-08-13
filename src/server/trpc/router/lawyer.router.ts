@@ -7,7 +7,6 @@ import {
     adminProcedure,
 } from '../init'
 import type { TRPCContext } from '../init'
-import { createServiceRoleClient } from '@/lib/supabase/server'
 
 // ─── Input Schemas ────────────────────────────────────────────────────────────
 
@@ -584,29 +583,6 @@ export const lawyerRouter = createTRPCRouter({
                     code: 'INTERNAL_SERVER_ERROR',
                     message: error.message,
                 })
-            }
-
-            if (input.status !== 'PENDING') {
-                const { error: notificationError } = await ctx.supabase
-                    .from('notifications')
-                    .insert({
-                        user_id: lawyer.user_id,
-                        type: input.status === 'VERIFIED' ? 'PROFILE_VERIFIED' : 'PROFILE_REJECTED',
-                        title: input.status === 'VERIFIED'
-                            ? 'Your lawyer profile is verified'
-                            : 'Your lawyer verification needs attention',
-                        body: input.status === 'VERIFIED'
-                            ? 'Your profile is now visible in the public lawyer directory.'
-                            : `Your profile was not approved. Reason: ${input.rejectionReason}`,
-                        case_id: null,
-                    })
-
-                if (notificationError) {
-                    throw new TRPCError({
-                        code: 'INTERNAL_SERVER_ERROR',
-                        message: 'Verification was updated, but the lawyer could not be notified.',
-                    })
-                }
             }
 
             return data

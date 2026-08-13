@@ -85,7 +85,7 @@ export default function AdminUsersPage() {
                                 </div>
                                 <div className="min-w-0">
                                     <p className="font-body text-sm font-semibold text-foreground truncate">{lawyer.full_name}</p>
-                                    <p className="font-body text-xs text-muted-foreground truncate">{firstRelation(lawyer.users)?.email ?? "—"}</p>
+                                    <p className="font-body text-xs text-muted-foreground truncate">{lawyer.users?.email ?? "—"}</p>
                                     <p className="font-body text-[0.6875rem] text-muted-foreground/70 truncate">
                                         {lawyer.state_bar_council ?? "Council not provided"}{lawyer.enrollment_year ? ` • ${lawyer.enrollment_year}` : ""}
                                     </p>

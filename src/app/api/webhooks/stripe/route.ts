@@ -31,14 +31,13 @@ export async function POST(req: NextRequest) {
             }
 
             const connectionId = session.metadata?.connectionId
-            const clientId = session.metadata?.clientId
             const lawyerId = session.metadata?.lawyerId
             const paymentIntentId =
                 typeof session.payment_intent === 'string'
                     ? session.payment_intent
                     : session.payment_intent?.id ?? null
 
-            if (!connectionId || !clientId || !lawyerId || !paymentIntentId) {
+            if (!connectionId || !lawyerId) {
                 console.error('Stripe webhook missing required metadata', {
                     sessionId: session.id,
                     connectionId,
@@ -49,40 +48,13 @@ export async function POST(req: NextRequest) {
 
             const { data: existingPayment, error: existingError } = await supabase
                 .from('payments')
-                .select(`
-                    id,
-                    status,
-                    amount,
-                    currency,
-                    connection_id,
-                    client_id,
-                    connections!inner(lawyer_id)
-                `)
+                .select('id, status')
                 .eq('stripe_session_id', session.id)
                 .single()
 
             if (existingError || !existingPayment) {
                 console.error('Stripe webhook payment row not found', existingError)
                 return NextResponse.json({ error: 'Payment not found' }, { status: 404 })
-            }
-
-            const connectionRelation = Array.isArray(existingPayment.connections)
-                ? existingPayment.connections[0]
-                : existingPayment.connections
-            const sessionMatchesPayment =
-                existingPayment.connection_id === connectionId &&
-                existingPayment.client_id === clientId &&
-                connectionRelation?.lawyer_id === lawyerId &&
-                session.client_reference_id === connectionId &&
-                session.amount_total === existingPayment.amount &&
-                session.currency?.toUpperCase() === existingPayment.currency.toUpperCase()
-
-            if (!sessionMatchesPayment) {
-                console.error('Stripe webhook data did not match the local payment', {
-                    sessionId: session.id,
-                    connectionId,
-                })
-                return NextResponse.json({ error: 'Payment data mismatch' }, { status: 400 })
             }
 
             if (existingPayment.status !== 'CAPTURED') {
@@ -93,57 +65,41 @@ export async function POST(req: NextRequest) {
                         stripe_payment_intent_id: paymentIntentId,
                     })
                     .eq('id', existingPayment.id)
-                    .in('status', ['PENDING', 'FAILED'])
 
                 if (paymentError) {
                     console.error('Failed to mark Stripe payment captured:', paymentError)
                     return NextResponse.json({ error: 'Payment update failed' }, { status: 500 })
                 }
-            }
 
-            const { error: notificationError } = await supabase.from('notifications').upsert({
-                user_id: lawyerId,
-                type: 'CONNECTION_REQUEST',
-                title: 'New paid connection request',
-                body: 'A client has paid the connection fee and requested to connect with you.',
-                case_id: null,
-                dedupe_key: `stripe:${session.id}:connection-request`,
-            }, { onConflict: 'dedupe_key', ignoreDuplicates: true })
-
-            if (notificationError) {
-                console.error('Failed to notify lawyer about captured payment:', notificationError)
-                return NextResponse.json({ error: 'Notification failed' }, { status: 500 })
+                await supabase.from('notifications').insert({
+                    user_id: lawyerId,
+                    type: 'CONNECTION_REQUEST',
+                    title: 'New paid connection request',
+                    body: 'A client has paid the connection fee and requested to connect with you.',
+                    case_id: null,
+                })
             }
         }
 
         if (event.type === 'checkout.session.expired') {
             const session = event.data.object as Stripe.Checkout.Session
-            const { error: expirationError } = await supabase
+            const connectionId = session.metadata?.connectionId
+
+            await supabase
                 .from('payments')
                 .update({ status: 'FAILED' })
                 .eq('stripe_session_id', session.id)
                 .eq('status', 'PENDING')
 
-            if (expirationError) {
-                return NextResponse.json({ error: 'Payment expiration update failed' }, { status: 500 })
-            }
-        }
-
-        if (event.type === 'charge.refunded') {
-            const charge = event.data.object as Stripe.Charge
-            const paymentIntentId = typeof charge.payment_intent === 'string'
-                ? charge.payment_intent
-                : charge.payment_intent?.id
-
-            if (paymentIntentId && charge.refunded) {
-                const { error: refundUpdateError } = await supabase
-                    .from('payments')
-                    .update({ status: 'REFUNDED' })
-                    .eq('stripe_payment_intent_id', paymentIntentId)
-
-                if (refundUpdateError) {
-                    return NextResponse.json({ error: 'Refund reconciliation failed' }, { status: 500 })
-                }
+            if (connectionId) {
+                await supabase
+                    .from('connections')
+                    .update({
+                        status: 'DECLINED',
+                        decline_reason: 'Payment session expired before completion',
+                    })
+                    .eq('id', connectionId)
+                    .eq('status', 'PENDING')
             }
         }
 

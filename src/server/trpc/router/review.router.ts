@@ -2,7 +2,6 @@ import { z } from "zod";
 import { baseProcedure, clientProcedure, adminProcedure, createTRPCRouter } from "../init";
 import { TRPCError } from "@trpc/server";
 import { recalculateLawyerRating } from './lawyer.router'
-import { createServiceRoleClient } from '@/lib/supabase/server'
 
 const caseResult = z.enum(['WON', 'LOST', 'SETTLED'])
 

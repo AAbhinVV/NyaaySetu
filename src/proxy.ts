@@ -34,6 +34,7 @@ export default clerkMiddleware(async (auth, req) => {
     if (userId && (isSignInOrSignUpRoute(req) || isLandingPage)) {
         const role =
             (sessionClaims?.metadata as { role?: string })?.role ??
+            (sessionClaims?.unsafeMetadata as { role?: string })?.role ??
             null
 
         let redirectTo: string
@@ -60,19 +61,6 @@ export default clerkMiddleware(async (auth, req) => {
     }
 
     await auth.protect()
-
-    // These checks improve navigation UX only. API authorization always uses the
-    // authoritative role stored in Supabase.
-    const role = (sessionClaims?.metadata as { role?: string })?.role
-    const path = req.nextUrl.pathname
-    const expectedPrefix =
-        role === 'CLIENT' ? '/dashboard/client' :
-        role === 'LAWYER' ? '/dashboard/lawyer' :
-        role === 'ADMIN' ? '/dashboard/admin' : null
-
-    if (path.startsWith('/dashboard/') && expectedPrefix && !path.startsWith(expectedPrefix)) {
-        return NextResponse.redirect(new URL(expectedPrefix, req.url))
-    }
 })
 
 export const config = {

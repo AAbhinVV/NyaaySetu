@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { createTRPCRouter, clientProcedure } from '../init'
+import { recalculateLawyerRating } from './lawyer.router'
 
 const CaseStatus = z.enum(['IN_PROGRESS', 'HEARING_SET', 'VERDICT', 'CLOSED'])
 
@@ -621,6 +622,83 @@ export const clientRouter = createTRPCRouter({
             }
 
             return { updated: count ?? 0 }
+        }),
+
+    /** Submit a review for a closed case */
+    submitReview: clientProcedure
+        .input(z.object({
+            caseId: z.uuid(),
+            rating: z.number().min(1).max(5).int(),
+            outcome: z.enum(['WON', 'LOST', 'SETTLED']),
+            body: z.string().min(10).max(1000),
+        }))
+        .mutation(async ({ ctx, input }) => {
+            // 1. Ownership + fetch case data
+            const { data: caseData, error: caseError } = await ctx.supabase
+                .from('cases')
+                .select('id, status, lawyer_id')
+                .eq('id', input.caseId)
+                .eq('client_id', ctx.userId)
+                .single()
+
+            if (caseError || !caseData) {
+                throw new TRPCError({
+                    code: 'FORBIDDEN',
+                    message: 'You do not have access to this case',
+                })
+            }
+
+            if (caseData.status !== 'CLOSED') {
+                throw new TRPCError({
+                    code: 'BAD_REQUEST',
+                    message: 'Reviews can only be submitted for closed cases',
+                })
+            }
+
+            // 2. Duplicate check
+            const { data: existingReview } = await ctx.supabase
+                .from('reviews')
+                .select('id')
+                .eq('case_id', input.caseId)
+                .eq('reviewer_id', ctx.userId)
+                .maybeSingle()
+
+            if (existingReview) {
+                throw new TRPCError({
+                    code: 'CONFLICT',
+                    message: 'You have already submitted a review for this case',
+                })
+            }
+
+            // 3. Insert
+            const { data: review, error: reviewError } = await ctx.supabase
+                .from('reviews')
+                .insert({
+                    case_id: input.caseId,
+                    lawyer_id: caseData.lawyer_id,
+                    reviewer_id: ctx.userId,
+                    rating: input.rating,
+                    outcome: input.outcome,
+                    body: input.body,
+                })
+                .select()
+                .single()
+
+            if (reviewError || !review) {
+                throw new TRPCError({
+                    code: 'INTERNAL_SERVER_ERROR',
+                    message: 'Failed to submit review',
+                })
+            }
+
+            // 4. Recalculate lawyer rating
+            try {
+                await recalculateLawyerRating(ctx, caseData.lawyer_id)
+            } catch (err) {
+                console.error('Failed to recalculate rating:', err)
+            }
+
+            return review
         }),
 
     /** Get reviews the client has submitted */

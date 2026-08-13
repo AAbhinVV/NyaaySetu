@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { createTRPCRouter, protectedProcedure, lawyerProcedure } from '../init'
+import type { TRPCContext } from '../init'
 import { updateLawyerWinRate } from './lawyer.router'
 
 // ─── Shared Internal Function ─────────────────────────────────────────────────
@@ -213,7 +214,7 @@ export const caseRouter = createTRPCRouter({
 
             // Recalculate lawyer win rate
             try {
-                await updateLawyerWinRate(ctx, ctx.userId)
+                await updateLawyerWinRate(ctx, existing.lawyer_id)
             } catch (err) {
                 console.error('Failed to update win rate after verdict:', err)
             }
