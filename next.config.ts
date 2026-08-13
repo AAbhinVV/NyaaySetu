@@ -1,7 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-fix/security-and-auth-audit
     async headers() {
         return [{
             source: '/(.*)',
@@ -14,8 +13,6 @@ fix/security-and-auth-audit
             ],
         }]
     },
-=======
-main
     turbopack: {
         root: process.cwd(),
     },

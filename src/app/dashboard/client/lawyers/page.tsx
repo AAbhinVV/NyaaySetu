@@ -116,7 +116,7 @@ export default function FindLawyersPage() {
                 </div>
             ) : (
                 <div className="grid grid-cols-2 max-md:grid-cols-1 gap-4">
-                    {results.map((l) => (
+                    {results.map((l: any) => (
                         <Link key={l.id} href={`/dashboard/client/lawyers/${l.id}`}
                             className="bg-card rounded-xl shadow-lawyer hover:shadow-lg hover:-translate-y-px transition-all p-5 no-underline text-inherit block">
                             {/* Header */}

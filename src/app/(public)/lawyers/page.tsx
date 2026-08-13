@@ -81,7 +81,7 @@ export default function PublicLawyerDirectoryPage() {
                 </div>
             ) : (
                 <div className="grid grid-cols-3 max-md:grid-cols-1 gap-5">
-                    {lawyers.map((lawyer) => (
+                    {lawyers.map((lawyer: any) => (
                         <Link key={lawyer.id} href={`/lawyers/${lawyer.id}`} className="bg-card rounded-xl shadow-lawyer p-5 hover:shadow-lg transition-shadow block no-underline text-inherit group">
                             {/* Avatar + Name */}
                             <div className="flex items-center gap-3 mb-4">

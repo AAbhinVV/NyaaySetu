@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { createTRPCRouter, lawyerProcedure, protectedProcedure, clientProcedure } from "../init";
 import { TRPCError } from "@trpc/server";
-import { createCaseInternal } from "./case.router";
 import { createStripeCheckoutSession } from "@/lib/stripe";
 
 const connectionStatus = z.enum(['PENDING', 'ACTIVE', 'DECLINED'])
@@ -241,28 +240,6 @@ export const connectionRouter = createTRPCRouter({
                 .eq('connection_id', connection.id)
                 .eq('status', 'CAPTURED')
                 .maybeSingle()
-
-            if (paymentError) {
-                throw new TRPCError({
-                    code: 'INTERNAL_SERVER_ERROR',
-                    message: 'Failed to verify payment',
-                })
-            }
-
-            if (!payment) {
-                throw new TRPCError({
-                    code: 'FORBIDDEN',
-                    message: 'Cannot accept this request until payment is verified',
-                })
-            }
-
-            // 3. Update connection to ACTIVE
-            const { data: updatedConnection, error: updateError } = await ctx.supabase
-                .from('connections')
-                .update({ status: 'ACTIVE', accepted_at: new Date().toISOString() })
-                .eq('id', input.connectionId)
-                .select()
-                .single()
 
             if (paymentError) {
                 throw new TRPCError({

@@ -104,7 +104,7 @@ export default function LawyerDetailPage() {
                     <div className="text-center py-12 bg-card rounded-xl shadow-lawyer"><p className="font-body text-sm text-muted-foreground">No reviews yet.</p></div>
                 ) : (
                     <div className="bg-card rounded-xl shadow-lawyer overflow-hidden">
-                        {reviewList.map((r, i) => (
+                        {reviewList.map((r: any, i: number) => (
                             <div key={r.id} className={`px-6 py-5 ${i > 0 ? "border-t border-border" : ""}`}>
                                 <div className="flex items-baseline justify-between gap-4 mb-1">
                                     <div className="flex items-center gap-2">

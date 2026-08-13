@@ -45,11 +45,7 @@ export async function GET(
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-fix/security-and-auth-audit
     const { error: accessLogError } = await supabase.from('document_access_log').insert({
-=======
-    await supabase.from('document_access_log').insert({
-main
         document_id: document.id,
         accessed_by: dbUser.id,
         ip_address:
@@ -58,17 +54,12 @@ main
             null,
     })
 
- fix/security-and-auth-audit
     if (accessLogError) {
         return NextResponse.json({ error: 'Could not record document access' }, { status: 500 })
     }
 
     if (/^https?:\/\//i.test(document.file_url) || document.file_url.includes('..')) {
         return NextResponse.json({ error: 'Invalid document storage path' }, { status: 400 })
-=======
-    if (/^https?:\/\//i.test(document.file_url)) {
-        return NextResponse.redirect(document.file_url)
- main
     }
 
     const { data: signedUrlData, error: signedUrlError } = await supabase.storage

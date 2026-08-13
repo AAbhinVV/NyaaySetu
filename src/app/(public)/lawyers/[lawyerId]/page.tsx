@@ -135,7 +135,7 @@ export default function PublicLawyerProfilePage() {
                     </div>
                 ) : (
                     <div className="space-y-4">
-                        {reviewList.map((r) => (
+                        {reviewList.map((r: any) => (
                             <div key={r.id} className="bg-card rounded-xl shadow-sm p-5">
                                 <div className="flex items-center justify-between mb-2">
                                     <div className="flex items-center gap-3">

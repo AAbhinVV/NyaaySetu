@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@clerk/nextjs/server'
 import { createServiceRoleClient } from '@/lib/supabase/server'
- fix/security-and-auth-audit
 import { checkRateLimit } from '@/lib/ratelimit'
-=======
- main
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024
 const ALLOWED_TYPES = [
@@ -16,7 +13,6 @@ const ALLOWED_TYPES = [
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ]
 
- fix/security-and-auth-audit
 function hasExpectedSignature(type: string, buffer: Buffer) {
     if (type === 'application/pdf') return buffer.subarray(0, 5).toString() === '%PDF-'
     if (type === 'image/jpeg') return buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff
@@ -26,8 +22,6 @@ function hasExpectedSignature(type: string, buffer: Buffer) {
     return buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))
 }
 
-=======
- main
 export async function POST(req: NextRequest) {
     const { userId } = await auth()
 
@@ -35,14 +29,11 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
- fix/security-and-auth-audit
     const rateLimit = await checkRateLimit('upload', userId)
     if (!rateLimit.success) {
         return NextResponse.json({ error: 'Too many uploads. Please wait and try again.' }, { status: 429 })
     }
 
-=======
- main
     const formData = await req.formData()
     const file = formData.get('file') as File | null
 
@@ -50,11 +41,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Verification document is required' }, { status: 400 })
     }
 
- fix/security-and-auth-audit
     if (file.size === 0 || file.size > MAX_FILE_SIZE) {
-=======
-    if (file.size > MAX_FILE_SIZE) {
- main
         return NextResponse.json({ error: 'File too large. Maximum size is 5MB.' }, { status: 413 })
     }
 
@@ -74,6 +61,11 @@ export async function POST(req: NextRequest) {
     }
 
     const buffer = Buffer.from(await file.arrayBuffer())
+
+    if (!hasExpectedSignature(file.type, buffer)) {
+        return NextResponse.json({ error: 'File content does not match its declared type' }, { status: 400 })
+    }
+
     const sanitizedName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
     const storagePath = `lawyer-verification/${dbUser.id}/${Date.now()}_${sanitizedName}`
 
