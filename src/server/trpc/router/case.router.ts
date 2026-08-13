@@ -214,7 +214,7 @@ export const caseRouter = createTRPCRouter({
 
             // Recalculate lawyer win rate
             try {
-                await updateLawyerWinRate(ctx, existing.lawyer_id)
+                await updateLawyerWinRate(ctx, ctx.userId)
             } catch (err) {
                 console.error('Failed to update win rate after verdict:', err)
             }

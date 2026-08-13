@@ -7,6 +7,7 @@ import {
     adminProcedure,
 } from '../init'
 import type { TRPCContext } from '../init'
+import { createServiceRoleClient } from '@/lib/supabase/server'
 
 // ─── Input Schemas ────────────────────────────────────────────────────────────
 

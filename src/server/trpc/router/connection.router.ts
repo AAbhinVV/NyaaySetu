@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, lawyerProcedure, protectedProcedure, clientProcedure } from "../init";
 import { TRPCError } from "@trpc/server";
-import { createStripeCheckoutSession } from "@/lib/stripe";
+import { createStripeCheckoutSession, retrieveStripeSession } from "@/lib/stripe";
 
 const connectionStatus = z.enum(['PENDING', 'ACTIVE', 'DECLINED'])
 const CONNECTION_FEE_PAISE = 49900
@@ -142,7 +142,7 @@ export const connectionRouter = createTRPCRouter({
 
             const { data: pendingPayment } = await ctx.supabase
                 .from('payments')
-                .select('id')
+                .select('id, stripe_session_id')
                 .eq('connection_id', connection.id)
                 .eq('status', 'PENDING')
                 .maybeSingle()
